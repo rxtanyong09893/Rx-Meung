@@ -117,6 +117,14 @@ button.tile:hover{background:var(--g3);border-color:var(--g2)}button.tile:focus-
 <div id="printArea"></div>
 <div id="toast"></div>
 <div id="busy" class="hide"><div class="spin"></div></div>
+<script>/* ถ้าโหลดไฟล์ใดไม่สำเร็จ แสดงสาเหตุแทนการค้างที่ "กำลังโหลดระบบ…" */
+window.addEventListener('error', function (e) {
+  var r = document.getElementById('root'); if (!r || !/กำลังโหลดระบบ/.test(r.textContent)) return;
+  var src = e.target && (e.target.src || e.target.href), msg = src ? 'โหลดไฟล์ไม่สำเร็จ: ' + src : (e.message || 'ข้อผิดพลาดไม่ทราบสาเหตุ');
+  r.innerHTML = '<div style="max-width:640px;margin:60px auto;padding:16px 20px;border-radius:10px;background:#fee2e2;color:#991b1b;font-family:Sarabun,sans-serif">'
+    + '<b>โหลดระบบไม่สำเร็จ</b><br>' + msg.replace(/</g, '&lt;') + '<br><small>ตรวจว่าใน GitHub มีโฟลเดอร์ js (app.js, app2.js, server.js) และไฟล์ config.js อยู่ชั้นเดียวกับ index.html</small></div>';
+}, true);
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="js/server.js"></script>
