@@ -1,0 +1,4 @@
+﻿item_type,code,name,strength,dosage_form,unit,category,unit_price
+drug,PARA500,Paracetamol,500 mg,tablet,เม็ด,ED,0.25
+supply,GAUZE3,ผ้าก๊อซ,3x3 นิ้ว,,ห่อ,วัสดุการแพทย์,12
+supply,A4,กระดาษ A4,80 แกรม,,รีม,วัสดุสำนักงาน,115

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบคลังยา รพ.สต.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- หน้าเข้าสู่ระบบ -->
+  <section id="loginView" class="login hidden">
+    <form id="loginForm" class="card login-card">
+      <div class="brand-mark">Rx</div>
+      <h1 id="loginTitle"></h1>
+      <p class="muted" id="loginSub"></p>
+      <label class="signup-only hidden">ชื่อ-สกุล<input name="full_name" autocomplete="name"></label>
+      <label>อีเมล<input name="email" type="email" required autocomplete="username"></label>
+      <label>รหัสผ่าน<input name="password" type="password" required minlength="6" autocomplete="current-password"></label>
+      <button class="btn primary" type="submit" id="loginBtn">เข้าสู่ระบบ</button>
+      <button class="btn link" type="button" id="toggleSignup">ยังไม่มีบัญชี? สมัครใช้งาน</button>
+    </form>
+  </section>
+
+  <!-- รอกำหนดสิทธิ์ -->
+  <section id="pendingView" class="login hidden">
+    <div class="card login-card">
+      <h1>รอผู้ดูแลระบบกำหนดสิทธิ์</h1>
+      <p class="muted">บัญชีของคุณสร้างเรียบร้อยแล้ว กรุณาแจ้งผู้ดูแลระบบ (เภสัชกร) ให้กำหนด รพ.สต. ที่สังกัด แล้วเข้าสู่ระบบอีกครั้ง</p>
+      <button class="btn" id="pendingLogout">ออกจากระบบ</button>
+    </div>
+  </section>
+
+  <!-- แอปหลัก -->
+  <div id="appView" class="hidden">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark sm">Rx</span><div><b id="appTitle"></b><small id="appSub"></small></div></div>
+      <div class="top-actions">
+        <div class="seg" id="modeSeg"><button data-mode="drug">ยา</button><button data-mode="supply">วัสดุ</button></div>
+        <select id="facilitySelect" title="หน่วยบริการ"></select>
+        <span class="user" id="userLabel"></span>
+        <button class="btn sm" id="logoutBtn">ออก</button>
+      </div>
+    </header>
+    <nav class="tabs" id="tabs">
+      <button data-tab="dashboard">ภาพรวม</button>
+      <button data-tab="stock">คงคลัง</button>
+      <button data-tab="receive">รับเข้า</button>
+      <button data-tab="dispense">จ่ายออก</button>
+      <button data-tab="adjust">ตัดหมดอายุ / ตรวจนับ</button>
+      <button data-tab="ledger">ทะเบียนคุม</button>
+      <button data-tab="history">ประวัติ</button>
+      <button data-tab="report">รายงานรายเดือน</button>
+      <button data-tab="admin" class="admin-only">ผู้ดูแลระบบ</button>
+    </nav>
+    <main id="main"></main>
+  </div>
+
+  <datalist id="drugList"></datalist>
+  <div id="modal" class="modal hidden"><div class="modal-box" id="modalBox"></div></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
