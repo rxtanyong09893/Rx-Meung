@@ -2,8 +2,8 @@
 /* ================= Utilities ================= */
 const $ = (s, r) => (r || document).querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = n => Number(n || 0).toLocaleString('th-TH');
-const money = n => Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = n => Number(n || 0).toLocaleString('th-TH-u-nu-latn');  // เลขอารบิกเสมอ
+const money = n => Number(n || 0).toLocaleString('th-TH-u-nu-latn', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const thDate = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + (+iso.slice(0, 4) + 543) : '-';
 const thDT = s => s ? thDate(s) + ' ' + s.slice(11, 16) : '-';
 const todayIso = () => { const d = new Date(), z = n => ('0' + n).slice(-2); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); };
@@ -11,6 +11,15 @@ const fyStart = () => { const t = todayIso(), y = +t.slice(0, 4); return (+t.sli
 const ST = { pending: 'รออนุมัติ', processing: 'กำลังดำเนินการ', approved: 'อนุมัติแล้ว', rejected: 'ไม่อนุมัติ', cancelled: 'ยกเลิก', active: 'ใช้งาน', disabled: 'ระงับ' };
 const badge = s => `<span class="badge b-${esc(s)}">${esc(ST[s] || s)}</span>`;
 const expBadge = (e) => { const t = todayIso(), n = new Date(Date.now() + 180 * 864e5), nl = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2); return e < t ? '<span class="badge b-exp">หมดอายุ</span>' : e <= nl ? '<span class="badge b-near">ใกล้หมดอายุ</span>' : ''; };
+/** dropdown เลือกเวชภัณฑ์ (select แบบเดียวกับหน้าบันทึก ME) จัดกลุ่มตามหมวด เรียงตามชื่อ */
+const drugOpts = (ds, blank, sel) => {
+  const g = {}; ds.forEach(d => { const c = d.category || 'ไม่ระบุหมวด'; (g[c] = g[c] || []).push(d); });
+  const cats = Object.keys(g).sort((a, b) => a.localeCompare(b, 'th'));
+  const op = d => `<option value="${esc(d.drugId)}"${d.drugId === sel ? ' selected' : ''}>${esc(d.name)} (${esc(d.unit)})</option>`;
+  return `<option value="">${esc(blank)}</option>` + (cats.length < 2 ? ds.slice().sort((a, b) => a.name.localeCompare(b.name, 'th')).map(op).join('')
+    : cats.map(c => `<optgroup label="${esc(c)}">${g[c].sort((a, b) => a.name.localeCompare(b.name, 'th')).map(op).join('')}</optgroup>`).join(''));
+};
+const daysTo = e => Math.round((new Date(e + 'T00:00:00') - new Date(todayIso() + 'T00:00:00')) / 864e5);
 const ICON = {
   home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
   plus: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>',
@@ -27,7 +36,7 @@ const ICON = {
 const ico = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
 const LOGO = '<img src="logo.jpg" alt="โลโก้ องค์การบริหารส่วนจังหวัดปัตตานี" style="width:100%;height:100%;display:block">';
 
-const S = { rp: 'rcvreg', rf: { fy: '', month: '', drug: '', supplier: '' }, token: null, user: null, view: 'home', meta: null, cart: {}, drugs: [], wh: 'lots' };
+const S = { rp: 'rcvdoc', rf: { fy: '', month: '', drug: '', supplier: '', rcvNo: '' }, token: null, user: null, view: 'home', meta: null, cart: {}, drugs: [], wh: 'lots' };
 try { S.token = sessionStorage.getItem('tk'); } catch (e) {}
 const saveTk = () => { try { S.token ? sessionStorage.setItem('tk', S.token) : sessionStorage.removeItem('tk'); } catch (e) {} };
 
@@ -57,7 +66,7 @@ const isAdm = () => !!(S.user && S.user.role === 'admin');
 const run = (t, fn, extra) => srv('load', Object.assign({ t: t }, extra || {})).then(D => fn(Server(D, S.meta || { hospitals: [] })));
 const LOAN_T = ['Loans', 'LoanLines', 'LoanReturns', 'LoanReturnLines'];
 const LOCAL = {
-  dashboard: () => run(['Requests', 'RequestItems', 'Issues', 'Loans', 'LoanLines', 'MedErrors'].concat(isAdm() ? ['Drugs', 'Lots'] : []), X => X.dashboard_(S.user)),
+  dashboard: () => run(['Requests', 'RequestItems', 'Issues', 'Loans', 'LoanLines', 'LoanReturns', 'MedErrors'].concat(isAdm() ? ['Drugs', 'Lots'] : []), X => X.dashboard_(S.user)),
   drugList: () => run(['Drugs', 'Lots'], X => X.drugList_(S.user)),
   requests: p => run(['Requests', 'RequestItems'], X => X.listRequests_(S.user, p)),
   requestDetail: p => run(['Requests', 'RequestItems', 'Drugs'].concat(isAdm() ? ['Lots'] : []), X => X.requestDetail_(S.user, p)),
@@ -67,11 +76,11 @@ const LOCAL = {
   stockSummary: () => run(['Drugs', 'Lots'], X => X.computeStock_()),
   lots: p => run(['Drugs', 'Lots'], X => X.lotsList_(S.user, p)),
   stockCard: p => run(['Drugs', 'StockCard'], X => X.stockCard_(S.user, p), { drugId: p.drugId || '' }),
-  report: p => run(p.rpt === 'isssum' ? ['Issues', 'IssueItems'] : p.rpt === 'loansum' ? ['Loans', 'LoanLines'] : ['Receipts', 'Drugs'], X => X.report_(p)),
-  loans: () => run(['Loans', 'LoanLines'], X => X.loanRows_(S.user)),
+  report: p => run(p.rpt === 'isssum' ? ['Issues', 'IssueItems'] : p.rpt === 'loansum' ? LOAN_T : ['Receipts', 'Drugs'], X => X.report_(p)),
+  loans: () => run(['Loans', 'LoanLines', 'LoanReturns'], X => X.loanRows_(S.user)),
   loanDetail: p => run(LOAN_T, X => X.loanDetail_(S.user, p)),
   loanDoc: p => run(LOAN_T, X => X.loanReport_(S.user, p.loanId)),
-  loanReg: p => run(['Loans', 'LoanLines'], X => X.loanRegReport_(S.user, p)),
+  loanReg: p => run(LOAN_T, X => X.loanRegReport_(S.user, p)),
   users: () => run(['Users'], X => X.usersList_()),
   logs: () => run(['Logs'], X => X.logsList_()),
   meList: p => run(['MedErrors'], X => X.meList_(S.user, p)),
@@ -161,7 +170,7 @@ const VIEWS = {};
 const MN_SHORT = ['ต.ค.', 'พ.ย.', 'ธ.ค.', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.'];
 const barChart = vals => { const mx = Math.max.apply(null, vals.concat([1])); return `<div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:6px">${vals.map((v, i) => `<div style="flex:1;text-align:center;font-size:.72rem;min-width:0"><div title="${esc(money(v))} บาท" style="background:${v ? 'var(--g2)' : '#e3eeea'};height:${Math.max(3, Math.round(v / mx * 100))}px;border-radius:4px 4px 0 0"></div>${MN_SHORT[i]}</div>`).join('')}</div>`; };
 const stat = (n, label, cls, id) => `<div class="stat ${cls || ''}" ${id ? `id="${id}" style="cursor:pointer"` : ''}><b>${n}</b><span>${label}</span></div>`;
-const loanLine = (rows, who) => rows.length ? tbl([['รายการยา'], ['ค้างคืน', 'r'], [who], ['กำหนดคืน']], rows.map(x => `<tr class="clk" data-ln="${esc(x.loanId)}"><td>${esc(x.name)}</td><td class="r">${fmt(x.qty)} ${esc(x.unit)}</td><td>${esc(x.other)}</td><td>${thDate(x.dueDate)}${x.overdue ? ' <span class="badge b-exp">เกินกำหนด</span>' : ''}</td></tr>`).join('')) : empty('ไม่มีรายการค้าง');
+const loanLine = (rows, who) => rows.length ? tbl([['รายการยา'], ['ค้างคืน', 'r'], [who], ['วันที่ให้ยืม']], rows.map(x => `<tr class="clk" data-ln="${esc(x.loanId)}"><td>${esc(x.name)}</td><td class="r">${fmt(x.qty)} ${esc(x.unit)}</td><td>${esc(x.other)}</td><td>${thDate(x.date)}</td></tr>`).join('')) : empty('ไม่มีรายการค้าง');
 /* ---- หน้าหลัก: จัดกลุ่ม การเบิกยา -> ยืม-คืนยา -> ME -> อื่นๆ ทุกการ์ดสถานะกดแล้วไปยังแท็บของตัวเอง ---- */
 const tile = (n, label, cls, key) => `<button type="button" class="tile ${cls || ''} ${Number(n) ? '' : 'z'}" data-g="${key}"><b>${n}</b><span>${label}</span></button>`;
 const tileS = (n, label, cls) => `<div class="tile st ${cls || ''}"><b>${n}</b><span>${label}</span></div>`;
@@ -198,8 +207,8 @@ VIEWS.home = async el => {
       <div class="grid2"><div>${pl('คำขอรออนุมัติ', ['req:pending', 'ดูทั้งหมด'])}${reqTable(d.recent)}</div>
       <div>${pl('หน่วยบริการที่เบิกมูลค่าสูงสุดปีงบนี้')}${d.topHosp.length ? tbl([['หน่วยบริการ'], ['ใบเบิก', 'r'], ['มูลค่า (บาท)', 'r']], d.topHosp.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${x.count}</td><td class="r">${money(x.value)}</td></tr>`).join('')) : empty('ยังไม่มีการเบิก')}</div></div>`)}
     ${sec('swap', 'การยืม-คืนยา', '',
-      `<div class="tiles">${tile(d.loanOpen, 'ยังไม่เสร็จสิ้น', d.loanOpen ? 'b' : '', 'loan:open')}${tile(d.loanOverdue, 'เกินกำหนดคืน', d.loanOverdue ? 'd' : '', 'loan:late')}</div>
-      ${d.loanLate.length ? pl('ยืม-คืนยาที่เกินกำหนด', ['loan:late', 'ดูทั้งหมด']) + tbl([['เลขที่'], ['ผู้ให้ยืม'], ['ผู้ยืม'], ['กำหนดคืน']], d.loanLate.map(r => `<tr class="clk" data-ln="${esc(r.loanId)}"><td>${esc(r.loanId)}</td><td>${esc(r.lenderName)}</td><td>${esc(r.borrowerName)}</td><td>${thDate(r.dueDate)}</td></tr>`).join('')) : ''}`)}
+      `<div class="tiles">${tile(d.loanOpen, 'ยังไม่เสร็จสิ้น', d.loanOpen ? 'b' : '', 'loan:open')}${tile(d.loanOverdue, 'ยังค้างคืน', d.loanOverdue ? 'w' : '', 'loan:late')}</div>
+      ${d.loanLate.length ? pl('ยืม-คืนยาที่ยังค้างคืน', ['loan:late', 'ดูทั้งหมด']) + tbl([['เลขที่'], ['ผู้ให้ยืม'], ['ผู้ยืม'], ['วันที่ขอยืม']], d.loanLate.map(r => `<tr class="clk" data-ln="${esc(r.loanId)}"><td>${esc(r.loanId)}</td><td>${esc(r.lenderName)}</td><td>${esc(r.borrowerName)}</td><td>${thDate(r.createdAt.slice(0, 10))}</td></tr>`).join('')) : ''}`)}
     ${meHomeHtml(d.me)}
     ${sec('box', 'สต็อกคลังยา', '<button type="button" class="lnk" data-g="wh">ไปหน้าคลังยา</button>',
       `<div class="grid3"><div>${pl('ใกล้หมด (ต่ำกว่าจุดสั่งซื้อ)')}${lowTbl(d.low, 'available', 'คงเหลือ')}</div><div>${pl('ใกล้หมดอายุ (≤180 วัน)')}${lowTbl(d.near, 'qty', 'จำนวน')}</div><div>${pl('หมดอายุแล้ว (ยังมียอดคงเหลือ)')}${lowTbl(d.expired, 'qty', 'จำนวน')}</div></div>`)}`;
@@ -231,14 +240,17 @@ function bindClicks(root) {
 VIEWS.req_new = async el => {
   if (S.user.role === 'admin') { el.innerHTML = '<div class="card"><div class="msg e">บัญชีแอดมินไม่สามารถยื่นคำขอเบิก</div></div>'; return; }
   S.drugs = await call('drugList'); S.cart = {};
-  el.innerHTML = `<h2>ขอเบิกยา/เวชภัณฑ์</h2><div class="card"><div class="row"><input id="q" class="grow" placeholder="ค้นหาชื่อยา…" autocomplete="off"><button class="btn" id="send">ส่งคำขอ (<span id="cn">0</span>)</button></div></div><div id="dl"></div>`;
+  el.innerHTML = `<h2>ขอเบิกยา/เวชภัณฑ์</h2><div class="card"><p class="mut" style="margin:0 0 8px">รายการที่คงคลังเป็น 0 (แสดง "หมด") จะเบิกไม่ได้จนกว่าคลังยาจะรับยาเข้า</p><div class="row"><input id="q" class="grow" placeholder="ค้นหาชื่อยา…" autocomplete="off"><button class="btn" id="send">ส่งคำขอ (<span id="cn">0</span>)</button></div></div><div id="dl"></div>`;
   const draw = () => {
     const q = $('#q').value.trim().toLowerCase(), L = S.drugs.filter(d => !q || d.name.toLowerCase().includes(q));
-    $('#dl').innerHTML = L.length ? tbl([['รายการยา'], ['หน่วย'], ['คลังมี', 'r'], ['จำนวนที่ขอ', 'r']], L.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.unit)}</td><td class="r">${d.available > 0 ? fmt(d.available) : '<span class="badge b-exp">หมด</span>'}</td><td class="r" style="width:130px"><input type="number" inputmode="numeric" min="0" step="1" data-d="${esc(d.drugId)}" value="${S.cart[d.drugId] || ''}" style="width:110px;text-align:right"></td></tr>`).join('')) : empty('ไม่พบรายการ');
+    $('#dl').innerHTML = L.length ? tbl([['รายการยา'], ['หน่วย'], ['คลังมี', 'r'], ['จำนวนที่ขอ', 'r']], L.map(d => d.available > 0
+      ? `<tr><td>${esc(d.name)}</td><td>${esc(d.unit)}</td><td class="r">${fmt(d.available)}</td><td class="r" style="width:130px"><input type="number" inputmode="numeric" min="0" step="1" data-d="${esc(d.drugId)}" value="${S.cart[d.drugId] || ''}" style="width:110px;text-align:right"></td></tr>`
+      : `<tr style="color:#8a9a95"><td>${esc(d.name)}</td><td>${esc(d.unit)}</td><td class="r"><span class="badge b-exp">หมด</span></td><td class="r" style="width:130px"><input disabled placeholder="เบิกไม่ได้" title="คงคลังเป็น 0 ยังเบิกไม่ได้" style="width:110px;text-align:center;background:#f1f4f3"></td></tr>`).join('')) : empty('ไม่พบรายการ');
     $('#dl').querySelectorAll('input[data-d]').forEach(i => i.oninput = () => { const n = parseInt(i.value, 10); if (n > 0) S.cart[i.dataset.d] = n; else delete S.cart[i.dataset.d]; $('#cn').textContent = Object.keys(S.cart).length; });
   };
   $('#q').oninput = draw; draw();
   $('#send').onclick = e => {
+    Object.keys(S.cart).forEach(id => { const d = S.drugs.find(x => x.drugId === id); if (!d || !(d.available > 0)) delete S.cart[id]; });
     const items = Object.keys(S.cart).map(id => ({ drugId: id, qty: S.cart[id] })); if (!items.length) return toast('กรุณาระบุจำนวนยาที่ต้องการเบิกอย่างน้อย 1 รายการ', true);
     const m = modal('ยืนยันส่งคำขอเบิก', `<p>ส่งคำขอเบิก <b>${items.length}</b> รายการ</p>${tbl([['รายการ'], ['จำนวน', 'r']], items.map(i => { const d = S.drugs.find(x => x.drugId === i.drugId); return `<tr><td>${esc(d.name)}</td><td class="r">${fmt(i.qty)} ${esc(d.unit)}</td></tr>`; }).join(''))}<label>หมายเหตุ (ถ้ามี)</label><textarea id="nt" maxlength="200" rows="2"></textarea><div class="mf"><button class="btn sec" data-close>กลับไปแก้ไข</button><button class="btn" id="ok">ยืนยันส่งคำขอ</button></div>`);
     $id(m, 'ok').onclick = b => act(b.target, async () => { const r = await call('createRequest', { items: items, note: val(m, 'nt') }); m.remove(); toast('ส่งคำขอแล้ว เลขที่ ' + r.reqId); go('req_list'); });
@@ -260,7 +272,7 @@ async function openRequest(id) {
   if (adm && pend) {
     const m = modal('พิจารณาอนุมัติคำขอ', head + `<div class="tw"><table><thead><tr><th>รายการ</th><th>หน่วย</th><th class="r">ขอ</th><th class="r">มีใช้ได้</th><th class="r">อนุมัติ</th></tr></thead><tbody>${d.items.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td class="r">${fmt(i.qtyReq)}</td><td class="r">${fmt(i.available)}</td><td class="r" style="width:110px"><input type="number" min="0" max="${i.qtyReq}" step="1" data-q="${esc(i.drugId)}" value="${Math.min(i.qtyReq, i.available)}" style="width:90px;text-align:right"></td></tr>`).join('')}</tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn sec sm" id="pv">ตรวจสอบการตัด LOT (FEFO)</button></div><div id="fefo"></div>
-    <div class="fg"><div><label>ผู้อนุมัติ (แสดงบนใบเบิก)</label><input id="ap" maxlength="60" value="${esc((S.meta && S.meta.keeper) || S.user.name)}"></div><div><label>หมายเหตุบนใบเบิก</label><input id="nt" maxlength="200" value="${esc(r.note)}"></div></div>
+    <div class="fg"><div><label>ผู้อนุมัติ (แสดงบนใบเบิก)</label><div class="mut" style="padding:8px 0">${esc((S.meta && S.meta.approver) || '')}<br><small>${esc((S.meta && S.meta.approverTitle) || '')}</small></div></div><div><label>หมายเหตุบนใบเบิก</label><input id="nt" maxlength="200" value="${esc(r.note)}"></div></div>
     <div class="mf"><button class="btn bad" id="rj">ไม่อนุมัติ</button><button class="btn" id="ok">อนุมัติ และออกใบเบิก</button></div>`, { wide: true });
     const qmap = () => { const o = {}; m.querySelectorAll('[data-q]').forEach(i => o[i.dataset.q] = i.value); return o; };
     $id(m, 'pv').onclick = b => act(b.target, async () => {
@@ -269,7 +281,7 @@ async function openRequest(id) {
     });
     $id(m, 'ok').onclick = b => act(b.target, async () => {
       if (!confirm('ยืนยันอนุมัติ ตัดสต็อกตามหลัก FEFO และออกเลขที่ใบเบิก?\n(ไม่สามารถย้อนกลับได้)')) return;
-      const r2 = await call('approveRequest', { reqId: id, qty: qmap(), approver: val(m, 'ap'), note: val(m, 'nt') });
+      const r2 = await call('approveRequest', { reqId: id, qty: qmap(), approver: (S.meta && S.meta.approver) || '', note: val(m, 'nt') });
       m.remove(); toast('อนุมัติแล้ว ใบเบิกเลขที่ ' + r2.docNo); go(S.view); openIssue(r2.docNo);
     });
     $id(m, 'rj').onclick = b => act(b.target, async () => {
@@ -294,13 +306,13 @@ VIEWS.issues = async el => {
 function issueHtml(d) {
   const i = d.issue, td = (v, al) => `<td style="text-align:${al}">${v}</td>`;
   const rows = d.items.map((x, n) => `<tr>${td(n + 1, 'center')}<td>${esc(x.drugName)}</td>${td(esc(x.unit), 'center')}${td(x.qtyReq == null ? '' : fmt(x.qtyReq), 'right')}${td(fmt(x.qty), 'right')}${td(money(x.value), 'right')}${td(thDate(x.expDate), 'center')}${td(esc(x.lotNo), 'center')}</tr>`).join('');
-  const sg = (t, nm, sub) => `<div>ลงชื่อ ................................................ (${t})<br>( ${nm ? esc(nm) : '&nbsp;'.repeat(34)} )${sub ? '<br>' + esc(sub) : ''}</div>`;
+  const sg = (t, nm, sub) => `<div>ลงชื่อ ................................................ ${t}<br>(${nm ? esc(nm) : '&nbsp;'.repeat(34)})${sub ? '<br>' + esc(sub).replace(/\n/g, '<br>') : ''}</div>`;
   return `<div class="sheet"><div class="t1">${esc(i.issuer)}</div><div class="t1">${esc(i.issuerSub)}</div><div class="t1" style="margin-bottom:8px">ใบอนุมัติเบิก</div>
   <div><b>เลขที่ใบเบิก</b> ปีงบประมาณ ${esc(i.docNo)} &nbsp;&nbsp;&nbsp;&nbsp; <b>วันที่เบิก</b> ${thDate(i.issueDate)}</div><div><b>หน่วยงานที่เบิก</b> ${esc(i.hospName)}</div>
   <div><b>หมายเหตุ:</b> ${esc(i.note)}</div><div style="font-weight:700;margin:6px 0">อนุมัติให้เบิกเวชภัณฑ์ตามรายการต่อไปนี้</div>
   <table><thead><tr><th style="width:44px">ลำดับ</th><th>เวชภัณฑ์</th><th style="width:52px">หน่วย</th><th style="width:66px">จำนวนเบิก</th><th style="width:76px">จำนวนอนุมัติ</th><th style="width:80px">มูลค่าเบิก</th><th style="width:84px">วันหมดอายุ</th><th style="width:80px">เลข LOT</th></tr></thead><tbody>${rows}</tbody></table>
   <div style="margin-top:8px;font-weight:600;text-align:center">จำนวนเบิก ${i.itemCount} รายการ &nbsp;&nbsp;&nbsp; มูลค่ารวม ${money(i.totalValue)} บาท</div>
-  <div class="sigs">${sg('ผู้เบิก', i.requester)}${sg('ผู้จ่าย', i.keeper)}${sg('ผู้อนุมัติ', i.approver, i.keeperTitle)}${sg('ผู้รับ', '')}</div></div>`;
+  <div class="sigs">${sg('ผู้เบิก', i.requester)}${sg('ผู้จ่าย', i.keeper, i.keeperTitle)}${sg('ผู้อนุมัติ', i.approverName, i.approverTitle)}${sg('ผู้รับ', i.requester)}</div></div>`;
 }
 async function openIssue(docNo) {
   const d = await call('issueDetail', { docNo: docNo });
@@ -354,10 +366,13 @@ function wordBlob(html) {
     t.querySelectorAll('th,td').forEach(c => {
       c.style.border = sig ? 'none' : '.75pt solid #000'; c.style.fontFamily = '"TH SarabunPSK"'; c.style.fontSize = '16pt'; c.style.width = '';
       if (c.tagName === 'TH') { c.style.background = '#E7E6E6'; c.style.textAlign = 'center'; }
-      if (sig) { c.style.textAlign = 'center'; c.style.paddingTop = '18pt'; c.setAttribute('width', Math.round(100 / Math.max(1, t.rows[0].cells.length)) + '%'); }
+      if (sig) { c.style.textAlign = 'center'; c.style.verticalAlign = 'top'; c.style.paddingTop = '18pt'; c.setAttribute('width', Math.round(100 / Math.max(1, t.rows[0].cells.length)) + '%'); }
     });
   });
   box.innerHTML = box.innerHTML.replace(/\.{33,}/g, '.'.repeat(32));
+  // ตัวเลขเป็นเลขอารบิกเสมอ: กำหนดภาษาของกลุ่มตัวเลขเป็นอังกฤษ (กัน Word ที่ตั้งค่า Numeral = Context แสดงเป็นเลขไทย)
+  const tw = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), tn = []; while (tw.nextNode()) if (/\d/.test(tw.currentNode.nodeValue)) tn.push(tw.currentNode);
+  tn.forEach(t => { const f = document.createElement('span'); f.innerHTML = esc(t.nodeValue).replace(/[\d][\d,.:/]*/g, m => `<span lang="EN-US" style="mso-ansi-language:EN-US;mso-bidi-language:EN-US">${m}</span>`); t.replaceWith(...f.childNodes); });
   const css = `@page Section1{size:${L ? '841.9pt 595.3pt' : '595.3pt 841.9pt'};mso-page-orientation:${L ? 'landscape' : 'portrait'};margin:70.9pt 56.7pt 56.7pt ${L ? '70.9pt' : '85.05pt'}}div.Section1{page:Section1}
   body,p,div,td,th{font-family:"TH SarabunPSK";font-size:16pt;line-height:1.0}.t1{text-align:center;font-weight:bold}.t2{text-align:center}
   table{border-collapse:collapse;width:100%}th,td{border:.75pt solid #000;padding:1pt 3pt;vertical-align:top}th{background:#E7E6E6;text-align:center}
@@ -397,27 +412,70 @@ VIEWS.warehouse = async el => {
   const wb = $('#wb');
   if (S.wh === 'lots') {
     const [st, lots] = await Promise.all([call('stockSummary'), call('lots', {})]);
-    wb.innerHTML = '<div class="card"><input id="fq" placeholder="ค้นหาชื่อยา…"></div><div id="lt"></div>';
+    const nd = (S.meta && S.meta.nearDays) || 180, F = S.whf = S.whf || { q: '', cat: '', st: '' }, open = S.whOpen = S.whOpen || {};
+    const stat = d => d.onHand <= 0 ? 'out' : d.expired > 0 ? 'exp' : (d.minStock > 0 && d.available <= d.minStock) ? 'low' : d.nearExp > 0 ? 'near' : 'ok';
+    const SL = { out: ['หมดคลัง', 'b-cancelled'], exp: ['มียาหมดอายุค้างคลัง', 'b-exp'], low: ['ต่ำกว่าจุดสั่งซื้อ', 'b-pending'], near: ['ใกล้หมดอายุ', 'b-near'], ok: ['ปกติ', 'b-approved'] };
+    const act0 = st.filter(d => d.active === 'Y'), cnt = k => act0.filter(d => stat(d) === k).length;
+    const cats = [...new Set(act0.map(d => d.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
+    const lotsOf = id => lots.filter(l => l.drugId === id);
+    const nearest = id => { const ls = lotsOf(id); return ls.length ? ls[0].expDate : ''; };
+    const value = act0.reduce((s, d) => s + lotsOf(d.drugId).reduce((a, l) => a + l.qtyRemain * l.unitPrice, 0), 0);
+    wb.innerHTML = `<div class="tiles c3" style="margin-bottom:10px">
+      <button class="tile" data-fs=""><b>${fmt(act0.length)}</b><span>รายการยาทั้งหมด · มูลค่า ${money(value)} บ.</span></button>
+      <button class="tile w" data-fs="low"><b>${cnt('low')}</b><span>ต่ำกว่าจุดสั่งซื้อ</span></button>
+      <button class="tile b" data-fs="near"><b>${cnt('near')}</b><span>ใกล้หมดอายุ (≤ ${nd} วัน)</span></button>
+      <button class="tile d" data-fs="exp"><b>${cnt('exp')}</b><span>มียาหมดอายุค้างคลัง</span></button>
+      <button class="tile z" data-fs="out"><b>${cnt('out')}</b><span>หมดคลัง</span></button>
+      <button class="tile" data-fs="ok"><b>${cnt('ok')}</b><span>ปกติ</span></button></div>
+      <div class="card"><div class="fg"><div><label>ค้นหาชื่อยา</label><input id="fq" placeholder="พิมพ์ชื่อยา…" value="${esc(F.q)}"></div>
+      <div><label>หมวด</label><select id="fc"><option value="">ทุกหมวด</option>${cats.map(c => `<option value="${esc(c)}"${c === F.cat ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+      <div><label>สถานะ</label><select id="fs"><option value="">ทั้งหมด</option>${Object.keys(SL).map(k => `<option value="${k}"${k === F.st ? ' selected' : ''}>${SL[k][0]}</option>`).join('')}</select></div></div>
+      <div class="row sp" style="margin-top:8px"><span class="mut" id="fn"></span><span><button class="lnk" id="xa">แสดง LOT ทั้งหมด</button> · <button class="lnk" id="xc">ซ่อน LOT ทั้งหมด</button></span></div></div><div id="lt"></div>`;
+    const lotTable = d => { const ls = lotsOf(d.drugId); return ls.length ? `<table style="margin:2px 0 6px;background:#fff;border:1px solid var(--line)"><thead><tr><th>เลข LOT</th><th>วันหมดอายุ</th><th class="r">คงเหลือ</th><th class="r">รับเข้า</th><th class="r">ราคา/หน่วย</th><th class="r">มูลค่าคงเหลือ</th><th>วันที่รับ</th><th>ผู้ขาย/ใบส่งของ</th><th></th></tr></thead><tbody>${ls.map(l => { const dd = daysTo(l.expDate);
+        return `<tr><td><b>${esc(l.lotNo)}</b></td><td>${thDate(l.expDate)}<br><small class="${dd < 0 ? '' : 'mut'}" style="${dd < 0 ? 'color:var(--bad);font-weight:600' : dd <= nd ? 'color:var(--warn)' : ''}">${dd < 0 ? 'หมดอายุแล้ว ' + fmt(-dd) + ' วัน' : 'เหลือ ' + fmt(dd) + ' วัน'}</small></td><td class="r"><b>${fmt(l.qtyRemain)}</b></td><td class="r">${fmt(l.qtyIn)}</td><td class="r">${money(l.unitPrice)}</td><td class="r">${money(l.qtyRemain * l.unitPrice)}</td><td>${thDate(String(l.receivedAt).slice(0, 10))}</td><td>${esc(l.supplier || '-')}</td><td><button class="btn sec sm" data-adj="${esc(l.lotId)}" data-n="${esc(d.name + ' LOT ' + l.lotNo)}">ปรับปรุง</button></td></tr>`; }).join('')}</tbody></table>` : '<div class="mut" style="padding:4px 0 8px">ไม่มี LOT คงเหลือ</div>'; };
     const draw = () => {
-      const q = $('#fq').value.trim().toLowerCase();
-      const rows = st.filter(d => d.active === 'Y' && (!q || d.name.toLowerCase().includes(q))).map(d => {
-        const low = d.minStock > 0 && d.available <= d.minStock;
-        return `<tr class="head"><td colspan="2">${esc(d.name)} <span class="mut">(${esc(d.unit)})</span> ${low ? '<span class="badge b-near">ต่ำกว่าจุดสั่งซื้อ</span>' : ''}</td><td class="r">คงเหลือรวม ${fmt(d.onHand)}</td><td class="r">ใช้ได้ ${fmt(d.available)}</td><td></td><td></td></tr>` +
-          lots.filter(l => l.drugId === d.drugId).map(l => `<tr class="sub"><td>LOT ${esc(l.lotNo)} ${expBadge(l.expDate)}</td><td>หมดอายุ ${thDate(l.expDate)}</td><td class="r">${fmt(l.qtyRemain)} / ${fmt(l.qtyIn)}</td><td class="r">${money(l.unitPrice)} บ./หน่วย</td><td>${thDate(l.receivedAt.slice(0, 10))}</td><td><button class="btn sec sm" data-adj="${esc(l.lotId)}" data-n="${esc(d.name + ' LOT ' + l.lotNo)}">ปรับปรุง</button></td></tr>`).join('');
-      }).join('');
-      $('#lt').innerHTML = rows ? tbl([['รายการ / LOT'], ['หมดอายุ'], ['คงเหลือ / รับ', 'r'], ['ราคาจากการรับ', 'r'], ['วันที่รับ'], ['']], rows) : empty('ไม่พบรายการ');
-      $('#lt').querySelectorAll('[data-adj]').forEach(b => b.onclick = () => adjModal(b.dataset.adj, b.dataset.n));
+      F.q = $('#fq').value.trim(); F.cat = $('#fc').value; F.st = $('#fs').value;
+      const q = F.q.toLowerCase(), L = act0.filter(d => (!q || d.name.toLowerCase().includes(q)) && (!F.cat || d.category === F.cat) && (!F.st || stat(d) === F.st));
+      $('#fn').textContent = 'แสดง ' + fmt(L.length) + ' จาก ' + fmt(act0.length) + ' รายการ · คลิกที่รายการยาเพื่อดู LOT';
+      wb.querySelectorAll('[data-fs]').forEach(b => b.style.outline = b.dataset.fs === F.st && F.st ? '2px solid var(--g2)' : '');
+      $('#lt').innerHTML = L.length ? tbl([['รายการยา'], ['หน่วย'], ['คงเหลือใช้ได้', 'r'], ['จุดสั่งซื้อ', 'r'], ['LOT', 'c'], ['หมดอายุใกล้สุด'], ['สถานะ'], ['', 'c']], L.map(d => { const k = stat(d), ne = nearest(d.drugId), o = !!open[d.drugId];
+        return `<tr class="clk" data-tg="${esc(d.drugId)}"><td><b>${esc(d.name)}</b>${d.category ? `<br><small class="mut">${esc(d.category)}</small>` : ''}</td><td>${esc(d.unit)}</td><td class="r"><b style="font-size:1.05rem">${fmt(d.available)}</b>${d.expired ? `<br><small style="color:var(--bad)">+ หมดอายุ ${fmt(d.expired)}</small>` : ''}</td><td class="r">${d.minStock ? fmt(d.minStock) : '-'}</td><td class="c">${d.lotCount}</td><td>${ne ? thDate(ne) : '-'}</td><td><span class="badge ${SL[k][1]}">${SL[k][0]}</span></td><td class="c" style="color:var(--g2);font-size:1.1rem">${o ? '▾' : '▸'}</td></tr>`
+          + (o ? `<tr class="sub"><td colspan="8" style="padding:4px 10px 4px 22px">${lotTable(d)}</td></tr>` : ''); }).join('')) : empty('ไม่พบรายการตามเงื่อนไข');
+      $('#lt').querySelectorAll('[data-tg]').forEach(r => r.onclick = () => { open[r.dataset.tg] = !open[r.dataset.tg]; draw(); });
+      $('#lt').querySelectorAll('[data-adj]').forEach(b => b.onclick = e => { e.stopPropagation(); adjModal(b.dataset.adj, b.dataset.n); });
     };
-    $('#fq').oninput = draw; draw();
+    $('#fq').oninput = draw; $('#fc').onchange = draw; $('#fs').onchange = draw;
+    wb.querySelectorAll('[data-fs]').forEach(b => b.onclick = () => { $('#fs').value = b.dataset.fs === F.st ? '' : b.dataset.fs; draw(); });
+    $('#xa').onclick = () => { act0.forEach(d => open[d.drugId] = true); draw(); }; $('#xc').onclick = () => { Object.keys(open).forEach(k => delete open[k]); draw(); };
+    draw();
   } else if (S.wh === 'recv') {
     const ds = (await call('stockSummary')).filter(d => d.active === 'Y');
-    wb.innerHTML = `<div class="card"><h3>บันทึกรับยาเข้าคลัง</h3><p class="mut" style="margin:2px 0 6px">วันที่รับ = วันนี้ · ราคาที่กรอกจะใช้เป็นมูลค่าในใบเบิกของ LOT นี้</p><div class="fg"><div style="grid-column:1/-1"><label>เวชภัณฑ์ (พิมพ์ค้นหาแล้วเลือก)</label><input id="rd" list="dl" autocomplete="off"><datalist id="dl">${ds.map(d => `<option value="${esc(d.name)} (${esc(d.unit)})"></option>`).join('')}</datalist></div>
-    <div><label>เลข LOT</label><input id="rl" maxlength="30"></div><div><label>วันหมดอายุ</label><input id="re" type="date" min="${todayIso()}"></div><div><label>จำนวนที่รับ</label><input id="rq" type="number" min="1" step="1" inputmode="numeric"></div><div><label>ราคาต่อหน่วย (บาท)</label><input id="rp" type="number" min="0" step="0.01" inputmode="decimal"></div><div style="grid-column:1/-1"><label>ผู้ขาย / เลขที่ใบส่งของ</label><input id="rs" maxlength="80"></div></div><div class="mf"><button class="btn" id="rv">บันทึกรับยา</button></div></div>`;
-    $('#rv').onclick = b => act(b.target, async () => {
-      const d = ds.find(x => (x.name + ' (' + x.unit + ')') === $('#rd').value); if (!d) throw new Error('กรุณาเลือกเวชภัณฑ์จากรายการที่แนะนำ');
-      const r = await call('receive', { drugId: d.drugId, lotNo: $('#rl').value, expDate: $('#re').value, qty: $('#rq').value, unitPrice: $('#rp').value, supplier: $('#rs').value });
-      toast('บันทึกรับยาแล้ว คงเหลือรวม ' + fmt(r.balance)); ['rl', 're', 'rq', 'rp', 'rs'].forEach(i => $('#' + i).value = '');
-    });
+    wb.innerHTML = `<div class="card"><h3>บันทึกรับยาเข้าคลัง <small class="mut" style="font-weight:400">(รับได้หลายรายการในครั้งเดียว)</small></h3><p class="mut" style="margin:2px 0 6px">บันทึก 1 ครั้ง = ใบรับยา 1 ใบ · ระบบออกเลขที่ใบรับให้อัตโนมัติเรียงตามลำดับ 1, 2, 3, … ในแต่ละปีงบประมาณ · วันที่รับ = วันนี้</p>
+      <div class="fg"><div><label>ผู้ขาย / แหล่งที่มา</label><input id="rs" maxlength="80" placeholder="เช่น องค์การเภสัชกรรม"></div><div><label>เลขที่ใบส่งของ / ใบกำกับภาษี</label><input id="ri" maxlength="40" placeholder="ถ้ามี"></div></div>
+      <div class="tw" style="margin-top:10px"><table><thead><tr><th class="c" style="width:36px">#</th><th style="min-width:270px">เวชภัณฑ์</th><th style="min-width:60px">หน่วย</th><th style="min-width:110px">เลข LOT</th><th style="min-width:140px">วันหมดอายุ</th><th class="r" style="min-width:90px">จำนวน</th><th class="r" style="min-width:100px">ราคา/หน่วย</th><th class="r" style="min-width:90px">มูลค่า</th><th></th></tr></thead><tbody id="rrows"></tbody></table></div>
+      <div class="row sp" style="margin-top:8px"><button class="btn sec sm" id="radd">+ เพิ่มรายการ</button><b id="rsum"></b></div>
+      <div class="mf"><button class="btn" id="rv">บันทึกรับยา</button></div></div>`;
+    const sum = () => { let n = 0, v = 0; wb.querySelectorAll('#rrows tr').forEach(r => { const q = +r.querySelector('[data-q]').value || 0, p = +r.querySelector('[data-p]').value || 0; r.querySelector('[data-v]').textContent = q && p ? money(q * p) : ''; if (r.querySelector('[data-d]').value) { n++; v += q * p; } });
+      $('#rsum').textContent = `${fmt(n)} รายการ · มูลค่ารวม ${money(v)} บาท`; $('#rv').textContent = n ? `บันทึกรับยา (${fmt(n)} รายการ)` : 'บันทึกรับยา';
+      wb.querySelectorAll('#rrows tr').forEach((r, k) => { r.cells[0].textContent = k + 1; const d = ds.find(x => x.drugId === r.querySelector('[data-d]').value); r.querySelector('[data-un]').textContent = d ? d.unit : '-'; }); };
+    const add = () => { const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="c"></td><td><select data-d>${drugOpts(ds, '— เลือกเวชภัณฑ์ —')}</select></td><td data-un class="mut">-</td><td><input data-l maxlength="30"></td><td><input data-e type="date" min="${todayIso()}"></td><td><input data-q type="number" min="1" step="1" inputmode="numeric" style="text-align:right"></td><td><input data-p type="number" min="0" step="0.01" inputmode="decimal" style="text-align:right"></td><td class="r" data-v></td><td><button class="btn sec sm" data-x title="ลบแถว">✕</button></td>`;
+      tr.querySelector('[data-x]').onclick = () => { tr.remove(); if (!wb.querySelector('#rrows tr')) add(); sum(); };
+      tr.querySelectorAll('input,select').forEach(e => e.oninput = sum); $('#rrows').appendChild(tr); sum(); };
+    add(); add(); add(); $('#radd').onclick = add;
+    $('#rv').onclick = b => {
+      const items = []; let err = '';
+      wb.querySelectorAll('#rrows tr').forEach((r, k) => { const g = a => r.querySelector(a).value.trim(), it = { drugId: g('[data-d]'), lotNo: g('[data-l]'), expDate: g('[data-e]'), qty: g('[data-q]'), unitPrice: g('[data-p]') };
+        if (!it.drugId && !it.lotNo && !it.expDate && !it.qty && !it.unitPrice) return;
+        if (!err && (!it.drugId || !it.lotNo || !it.expDate || !(+it.qty > 0) || it.unitPrice === '')) err = `รายการที่ ${k + 1}: กรุณากรอกเวชภัณฑ์ เลข LOT วันหมดอายุ จำนวน และราคาให้ครบ`;
+        items.push(it); });
+      if (err) return toast(err, true); if (!items.length) return toast('กรุณากรอกรายการยาอย่างน้อย 1 รายการ', true);
+      if (!$('#rs').value.trim()) return toast('กรุณากรอกผู้ขาย / แหล่งที่มา', true);
+      const nm = id => { const d = ds.find(x => x.drugId === id); return d ? d : { name: id, unit: '' }; };
+      const tot = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+      const m = modal('ยืนยันบันทึกใบรับยา', `<div class="kv"><b>ผู้ขาย</b><span>${esc($('#rs').value.trim())}</span><b>เลขที่ใบส่งของ</b><span>${esc($('#ri').value.trim() || '-')}</span><b>วันที่รับ</b><span>${thDate(todayIso())}</span><b>เลขที่ใบรับ</b><span class="mut">ระบบออกเลขถัดไปให้เมื่อกดยืนยัน</span></div>${tbl([['#', 'c'], ['เวชภัณฑ์'], ['หน่วย'], ['LOT'], ['หมดอายุ'], ['จำนวน', 'r'], ['ราคา/หน่วย', 'r'], ['มูลค่า', 'r']], items.map((i, k) => `<tr><td class="c">${k + 1}</td><td>${esc(nm(i.drugId).name)}</td><td>${esc(nm(i.drugId).unit)}</td><td>${esc(i.lotNo)}</td><td>${thDate(i.expDate)}</td><td class="r">${fmt(i.qty)}</td><td class="r">${money(i.unitPrice)}</td><td class="r">${money(i.qty * i.unitPrice)}</td></tr>`).join('') + `<tr class="head"><td></td><td colspan="6">รวม ${fmt(items.length)} รายการ</td><td class="r">${money(tot)}</td></tr>`)}<div class="mf"><button class="btn sec" data-close>กลับไปแก้ไข</button><button class="btn" id="ok">ยืนยันบันทึก</button></div>`, { wide: true });
+      $id(m, 'ok').onclick = b2 => act(b2.target, async () => { const r = await call('receiveMany', { supplier: $('#rs').value, invoiceNo: $('#ri').value, items: items }); m.remove(); toast(`บันทึกใบรับยาเลขที่ ${r.rcvSeq}/${r.fy} แล้ว (${fmt(r.count)} รายการ)`); go('warehouse'); rcvDocModal(r.rcvSeq, r.fy); });
+    };
   } else {
     const st = await call('stockSummary');
     wb.innerHTML = `<div class="row sp" style="margin-bottom:10px"><span class="mut">ทะเบียนเวชภัณฑ์ทั้งหมด ${st.length} รายการ</span><button class="btn" id="da">+ เพิ่มเวชภัณฑ์</button></div>` +
@@ -428,7 +486,7 @@ VIEWS.warehouse = async el => {
   }
 };
 function drugModal(d) {
-  const m = modal(d ? 'แก้ไขเวชภัณฑ์' : 'เพิ่มเวชภัณฑ์', `<label>ชื่อเวชภัณฑ์</label><input id="dn" maxlength="80" value="${esc(d ? d.name : '')}"><div class="fg"><div><label>หน่วยนับ</label><input id="du" maxlength="20" value="${esc(d ? d.unit : '')}"></div><div><label>หมวด</label><input id="dc" maxlength="40" value="${esc(d ? d.category : '')}"></div><div><label>จุดสั่งซื้อขั้นต่ำ</label><input id="dm" type="number" min="0" step="1" value="${d ? d.minStock : 0}"></div></div><div class="mf"><button class="btn" id="ds">บันทึก</button></div>`);
+  const m = modal(d ? 'แก้ไขเวชภัณฑ์' : 'เพิ่มเวชภัณฑ์', `<label>ชื่อเวชภัณฑ์</label><input id="dn" maxlength="80" value="${esc(d ? d.name : '')}"><div class="fg"><div><label>หน่วยนับ</label><select id="du"><option value="">— เลือกหน่วย —</option>${(d && d.unit && !UNITS.includes(d.unit) ? [d.unit] : []).concat(UNITS).map(u => `<option value="${esc(u)}"${d && d.unit === u ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select></div><div><label>หมวด</label><input id="dc" maxlength="40" value="${esc(d ? d.category : '')}"></div><div><label>จุดสั่งซื้อขั้นต่ำ</label><input id="dm" type="number" min="0" step="1" value="${d ? d.minStock : 0}"></div></div><div class="mf"><button class="btn" id="ds">บันทึก</button></div>`);
   $id(m, 'ds').onclick = b => act(b.target, async () => { await call('drugSave', { drugId: d ? d.drugId : '', name: val(m, 'dn'), unit: val(m, 'du'), category: val(m, 'dc'), minStock: val(m, 'dm') }); m.remove(); toast('บันทึกแล้ว'); go('warehouse'); });
 }
 function adjModal(lotId, name) {
@@ -439,9 +497,9 @@ function adjModal(lotId, name) {
 /* ---- Stock Card ---- */
 VIEWS.stockcard = async el => {
   const ds = await call('stockSummary');
-  el.innerHTML = `<h2>Stock Card</h2><div class="card"><div class="fg"><div style="grid-column:1/-1"><label>เวชภัณฑ์</label><input id="sd" list="sdl" autocomplete="off" placeholder="พิมพ์ค้นหาแล้วเลือก"><datalist id="sdl">${ds.map(d => `<option value="${esc(d.name)} (${esc(d.unit)})"></option>`).join('')}</datalist></div><div><label>ตั้งแต่วันที่</label><input id="sf" type="date" value="${fyStart()}"></div><div><label>ถึงวันที่</label><input id="st" type="date" value="${todayIso()}"></div></div><div class="mf"><button class="btn" id="sg">แสดง</button></div></div><div id="sr"></div>`;
+  el.innerHTML = `<h2>Stock Card</h2><div class="card"><div class="fg"><div style="grid-column:1/-1"><label>เวชภัณฑ์</label><select id="sd">${drugOpts(ds, '— เลือกเวชภัณฑ์ —')}</select></div><div><label>ตั้งแต่วันที่</label><input id="sf" type="date" value="${fyStart()}"></div><div><label>ถึงวันที่</label><input id="st" type="date" value="${todayIso()}"></div></div><div class="mf"><button class="btn" id="sg">แสดง</button></div></div><div id="sr"></div>`;
   $('#sg').onclick = b => act(b.target, async () => {
-    const d = ds.find(x => (x.name + ' (' + x.unit + ')') === $('#sd').value); if (!d) throw new Error('กรุณาเลือกเวชภัณฑ์จากรายการที่แนะนำ');
+    const d = ds.find(x => x.drugId === $('#sd').value); if (!d) throw new Error('กรุณาเลือกเวชภัณฑ์');
     const p = { drugId: d.drugId, from: $('#sf').value, to: $('#st').value }, r = await call('stockCard', p);
     const html = scHtml(r);
     $('#sr').innerHTML = `<div class="row" style="margin-bottom:10px"><button class="btn sec" id="p1">พิมพ์</button><button class="btn sec" id="p2">PDF</button><button class="btn sec" id="p3">Word</button></div><div class="tw" style="border:0">${html}</div>`;
@@ -493,17 +551,17 @@ async function backupXlsx() {
 const LST = { requested: 'รอผู้ให้ยืมพิจารณา', active: 'ยืมอยู่ (ยังคืนไม่ครบ)', returned: 'คืนครบแล้ว', closed: 'ปิดรายการ', rejected: 'ไม่อนุมัติ', cancelled: 'ยกเลิก' };
 const LCL = { requested: 'pending', active: 'near', returned: 'approved', closed: 'cancelled', rejected: 'rejected', cancelled: 'cancelled' };
 const lbadge = s => `<span class="badge b-${LCL[s] || 'cancelled'}">${esc(LST[s] || s)}</span>`;
-const UNITS = ['เม็ด', 'แคปซูล', 'กล่อง', 'ขวด', 'หลอด', 'ซอง', 'แผง', 'ชิ้น', 'อัน', 'ถุง', 'amp', 'vial'];
+const UNITS = ['เม็ด', 'แคปซูล', 'กล่อง', 'ขวด', 'หลอด', 'ซอง', 'แผง', 'ชิ้น', 'อัน', 'ถุง', 'แพ็ค', 'ม้วน', 'amp', 'vial'];
 const addDaysIso = n => { const d = new Date(Date.now() + n * 864e5), z = x => ('0' + x).slice(-2); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); };
 VIEWS.loans = async el => {
   const adm = S.user.role === 'admin', rows = await call('loans');
-  const tabs = adm ? [['all', 'ทั้งหมด'], ['open', 'ยังไม่เสร็จสิ้น'], ['late', 'เกินกำหนด']] : [['todo', 'รอคุณพิจารณา'], ['wait', 'รอผู้ให้ยืมพิจารณา'], ['bor', 'ยืมอยู่'], ['len', 'ให้ยืมอยู่'], ['all', 'ทั้งหมด'], ['late', 'เกินกำหนด']];
+  const tabs = adm ? [['all', 'ทั้งหมด'], ['open', 'ยังไม่เสร็จสิ้น'], ['late', 'ยังค้างคืน']] : [['todo', 'รอคุณพิจารณา'], ['wait', 'รอผู้ให้ยืมพิจารณา'], ['bor', 'ยืมอยู่'], ['len', 'ให้ยืมอยู่'], ['all', 'ทั้งหมด']];
   if (!tabs.some(t => t[0] === S.lt)) S.lt = tabs[0][0];
   const F = { all: () => true, open: r => r.open, late: r => r.overdue, todo: r => r.todo, in: r => r.role === 'borrower', out: r => r.role === 'lender', wait: r => r.role === 'borrower' && r.status === 'requested', bor: r => r.role === 'borrower' && r.status === 'active' && r.outstanding > 0, len: r => r.role === 'lender' && r.status === 'active' && r.outstanding > 0 }, list = rows.filter(F[S.lt]);
   el.innerHTML = `<div class="row sp"><h2>ยืม-คืนยาระหว่างหน่วยบริการ</h2>${adm ? '' : '<button class="btn" id="lnew">+ ขอยืมยา</button>'}</div>
   <div class="row" style="margin:8px 0"><button class="btn sec sm" id="lrOut">${adm ? 'ทะเบียนการให้ยืม' : 'ทะเบียนที่เราให้ยืม'}</button><button class="btn sec sm" id="lrIn">${adm ? 'ทะเบียนการยืม' : 'ทะเบียนที่เรายืมหน่วยบริการอื่น'}</button></div>
   <div class="seg">${tabs.map(t => `<button data-lt="${t[0]}" class="${S.lt === t[0] ? 'on' : ''}">${t[1]} (${rows.filter(F[t[0]]).length})</button>`).join('')}</div>
-  ${list.length ? tbl([['เลขที่'], ['วันที่ขอ'], ['ผู้ให้ยืม'], ['ผู้ยืม'], ['รายการ', 'c'], ['กำหนดคืน'], ['สถานะ']], list.map(r => `<tr class="clk" data-ln="${esc(r.loanId)}"><td>${esc(r.loanId)}${r.todo ? ' <span class="badge b-pending">รอคุณ</span>' : ''}</td><td>${thDate(r.createdAt.slice(0, 10))}</td><td>${esc(r.lenderName)}</td><td>${esc(r.borrowerName)}</td><td class="c">${r.itemCount}</td><td>${thDate(r.dueDate)}</td><td>${lbadge(r.status)}${r.overdue ? ' <span class="badge b-exp">เกินกำหนด</span>' : ''}</td></tr>`).join('')) : empty('ไม่มีรายการ')}`;
+  ${list.length ? tbl([['เลขที่'], ['วันที่ขอ'], ['ผู้ให้ยืม'], ['ผู้ยืม'], ['รายการ', 'c'], ['วันที่คืนจริง'], ['สถานะ']], list.map(r => `<tr class="clk" data-ln="${esc(r.loanId)}"><td>${esc(r.loanId)}${r.todo ? ' <span class="badge b-pending">รอคุณ</span>' : ''}</td><td>${thDate(r.createdAt.slice(0, 10))}</td><td>${esc(r.lenderName)}</td><td>${esc(r.borrowerName)}</td><td class="c">${r.itemCount}</td><td>${r.returnDates && r.returnDates.length ? r.returnDates.map(thDate).join('<br>') : '-'}</td><td>${lbadge(r.status)}</td></tr>`).join('')) : empty('ไม่มีรายการ')}`;
   el.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { S.lt = b.dataset.lt; go('loans'); });
   el.querySelectorAll('[data-ln]').forEach(r => r.onclick = () => openLoan(r.dataset.ln));
   if ($('#lnew')) $('#lnew').onclick = loanNew;
@@ -511,24 +569,24 @@ VIEWS.loans = async el => {
 };
 function loanNew() {
   const H = S.meta.hospitals.filter(h => h.code !== S.user.hospCode);
-  const m = modal('ขอยืมยาจากหน่วยบริการอื่น', `<div class="fg"><div><label>ยืมจาก</label><select id="ll"><option value="">— เลือกหน่วยบริการ —</option>${H.map(h => `<option value="${esc(h.code)}">${esc(h.name)}</option>`).join('')}</select></div><div><label>กำหนดคืน</label><input id="ld" type="date" min="${todayIso()}" value="${addDaysIso(30)}"></div></div>
-  <datalist id="lunits">${UNITS.map(u => `<option value="${esc(u)}"></option>`).join('')}</datalist><label>รายการยาที่ขอยืม (กรอกชื่อยา จำนวน และหน่วย)</label><div id="lrows"></div><button class="btn sec sm" id="ladd" style="margin-top:6px">+ เพิ่มรายการ</button>
+  const m = modal('ขอยืมยาจากหน่วยบริการอื่น', `<div class="fg"><div><label>ยืมจาก</label><select id="ll"><option value="">— เลือกหน่วยบริการ —</option>${H.map(h => `<option value="${esc(h.code)}">${esc(h.name)}</option>`).join('')}</select></div></div>
+  <label>รายการยาที่ขอยืม (กรอกชื่อยา จำนวน และหน่วย)</label><div id="lrows"></div><button class="btn sec sm" id="ladd" style="margin-top:6px">+ เพิ่มรายการ</button>
   <label>หมายเหตุ (ถ้ามี)</label><textarea id="lno" maxlength="200" rows="2"></textarea><div class="mf"><button class="btn sec" data-close>ยกเลิก</button><button class="btn" id="lsv">ส่งคำขอยืม</button></div>`, { wide: true });
-  const add = () => { const r = document.createElement('div'); r.className = 'row'; r.setAttribute('data-lr', '1'); r.style.marginBottom = '6px'; r.innerHTML = '<input class="grow" placeholder="ชื่อยา" data-n maxlength="80" autocomplete="off"><input type="number" min="1" step="1" inputmode="numeric" placeholder="จำนวน" data-q style="width:100px"><input list="lunits" placeholder="หน่วย" data-u maxlength="20" style="width:110px" autocomplete="off">'; $id(m, 'lrows').appendChild(r); };
+  const add = () => { const r = document.createElement('div'); r.className = 'row'; r.setAttribute('data-lr', '1'); r.style.marginBottom = '6px'; r.innerHTML = '<input class="grow" placeholder="ชื่อยา" data-n maxlength="80" autocomplete="off"><input type="number" min="1" step="1" inputmode="numeric" placeholder="จำนวน" data-q style="width:100px"><select data-u style="width:120px"><option value="">— หน่วย —</option>' + UNITS.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('') + '</select>'; $id(m, 'lrows').appendChild(r); };
   add(); $id(m, 'ladd').onclick = add;
   $id(m, 'lsv').onclick = b => act(b.target, async () => {
     const items = []; m.querySelectorAll('[data-lr]').forEach(r => {
       const n = r.querySelector('[data-n]').value, q = r.querySelector('[data-q]').value, u = r.querySelector('[data-u]').value; if (!n.trim() && !q && !u.trim()) return;
       items.push({ name: n, qty: q, unit: u });
     });
-    const r = await call('loanCreate', { lender: val(m, 'll'), dueDate: val(m, 'ld'), note: val(m, 'lno'), items: items });
+    const r = await call('loanCreate', { lender: val(m, 'll'), note: val(m, 'lno'), items: items });
     m.remove(); toast('ส่งคำขอยืมแล้ว เลขที่ ' + r.loanId); go('loans');
   });
 }
 async function openLoan(id) {
   const d = await call('loanDetail', { loanId: id }), l = d.loan, adm = l.role === 'admin', isL = adm || l.role === 'lender', isB = adm || l.role === 'borrower';
   const kv = (k, v) => v ? `<b>${k}</b><span>${v}</span>` : '';
-  const head = `<div class="kv">${kv('เลขที่', esc(l.loanId) + ' ' + lbadge(l.status) + (l.overdue ? ' <span class="badge b-exp">เกินกำหนด</span>' : ''))}${kv('ผู้ให้ยืม', esc(l.lenderName))}${kv('ผู้ยืม', esc(l.borrowerName))}${kv('วันที่ขอ', thDT(l.createdAt) + ' โดย ' + esc(l.createdBy))}${kv('กำหนดคืน', thDate(l.dueDate))}${kv('หมายเหตุ', esc(l.note))}${kv('ผู้อนุมัติให้ยืม', l.decidedBy ? esc(l.decidedBy) + ' ' + thDT(l.decidedAt) : '')}${kv('เหตุผล', esc(l.reason))}</div>`;
+  const head = `<div class="kv">${kv('เลขที่', esc(l.loanId) + ' ' + lbadge(l.status))}${kv('ผู้ให้ยืม', esc(l.lenderName))}${kv('ผู้ยืม', esc(l.borrowerName))}${kv('วันที่ขอ', thDT(l.createdAt) + ' โดย ' + esc(l.createdBy))}${kv('วันที่คืนจริง', d.returns.length ? d.returns.map(r => thDate(r.createdAt.slice(0, 10))).filter((x, i, a) => a.indexOf(x) === i).join(', ') : '-')}${kv('หมายเหตุ', esc(l.note))}${kv('ผู้อนุมัติให้ยืม', l.decidedBy ? esc(l.decidedBy) + ' ' + thDT(l.decidedAt) : '')}${kv('เหตุผล', esc(l.reason))}</div>`;
   const its = tbl([['รายการยา'], ['หน่วย'], ['ขอยืม', 'r'], ['ให้ยืม', 'r'], ['คืนแล้ว', 'r'], ['ค้างคืน', 'r']], d.items.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td class="r">${fmt(i.qtyReq)}</td><td class="r">${fmt(i.qtyLent)}</td><td class="r">${fmt(i.qtyReturned)}</td><td class="r">${l.status === 'active' ? fmt(i.outstanding) : '-'}</td></tr>`).join(''));
   const rets = d.returns.length ? '<h3 style="margin:14px 0 6px">ประวัติการคืน</h3>' + d.returns.map(r => `<div class="card" style="padding:10px"><div class="mut">${thDT(r.createdAt)} โดย ${esc(r.createdBy)}</div><div>${r.items.map(x => `${esc(x.name)} ${fmt(x.qty)} ${esc(x.unit)}`).join('<br>')}</div>${r.note ? `<div class="mut">หมายเหตุ: ${esc(r.note)}</div>` : ''}</div>`).join('') : '';
   const btn = [];
@@ -548,8 +606,8 @@ const qtyOf = (m, items) => items.map(i => ({ lineNo: i.lineNo, qty: m.querySele
 function loanDecideModal(d, parent) {
   const l = d.loan, m = modal('พิจารณาคำขอยืม ' + l.loanId, `<p class="mut">${esc(l.borrowerName)} ขอยืมจาก ${esc(l.lenderName)} — ระบุจำนวนที่ให้ยืมจริง (ใส่ 0 หากไม่ให้ยืมรายการนั้น)</p>
   <div class="tw"><table><thead><tr><th>รายการยา</th><th class="r">ขอยืม</th><th class="r">ให้ยืม</th></tr></thead><tbody>${qtyRows(d.items, 'req')}</tbody></table></div>
-  <div class="fg"><div><label>กำหนดคืน</label><input id="dd" type="date" min="${todayIso()}" value="${esc(l.dueDate)}"></div></div><div class="mf"><button class="btn bad" id="dj">ไม่อนุมัติ</button><button class="btn" id="da">อนุมัติให้ยืม</button></div>`, { wide: true });
-  $id(m, 'da').onclick = b => act(b.target, async () => { await call('loanDecide', { loanId: l.loanId, approve: true, items: qtyOf(m, d.items), dueDate: val(m, 'dd') }); m.remove(); parent.remove(); toast('อนุมัติให้ยืมแล้ว'); go('loans'); openLoan(l.loanId); });
+  <div class="mf"><button class="btn bad" id="dj">ไม่อนุมัติ</button><button class="btn" id="da">อนุมัติให้ยืม</button></div>`, { wide: true });
+  $id(m, 'da').onclick = b => act(b.target, async () => { await call('loanDecide', { loanId: l.loanId, approve: true, items: qtyOf(m, d.items) }); m.remove(); parent.remove(); toast('อนุมัติให้ยืมแล้ว'); go('loans'); openLoan(l.loanId); });
   $id(m, 'dj').onclick = b => act(b.target, async () => { const why = prompt('ระบุเหตุผลที่ไม่อนุมัติ'); if (why == null) return; await call('loanDecide', { loanId: l.loanId, approve: false, reason: why }); m.remove(); parent.remove(); toast('บันทึกการไม่อนุมัติแล้ว'); go('loans'); });
 }
 function loanReturnModal(d, parent) {
@@ -568,25 +626,31 @@ const MN_FULL = ['ตุลาคม', 'พฤศจิกายน', 'ธัน
 const curFY = () => { const t = todayIso(); return +t.slice(0, 4) + 543 + (+t.slice(5, 7) >= 10 ? 1 : 0); };
 const algn = (t, i) => t.aligns[i] === 'r' ? 'r' : t.aligns[i] === 'c' ? 'c' : '';
 VIEWS.reports = async el => {
-  const cur = curFY(), tabs = [['rcvreg', 'ทะเบียนรับยาเข้า'], ['rcvsum', 'สรุปมูลค่ารับยาเข้า'], ['isssum', 'สรุปมูลค่าเบิกรายหน่วย'], ['loansum', 'สรุปยืม-คืนยา']];
+  const cur = curFY(), tabs = [['rcvdoc', 'รับยาเข้าตามลำดับใบรับ'], ['rcvreg', 'ทะเบียนรับยาเข้า'], ['rcvsum', 'สรุปมูลค่ารับยาเข้า'], ['isssum', 'สรุปมูลค่าเบิกรายหน่วย'], ['loansum', 'สรุปยืม-คืนยา']];
   if (S.rf.fy === '' && !S.rfInit) { S.rf.fy = String(cur); S.rfInit = true; }
   const ds = S.rp === 'rcvreg' ? await call('stockSummary') : [];
   el.innerHTML = `<h2>รายงาน</h2><div class="seg" style="margin-top:10px">${tabs.map(t => `<button data-rt="${t[0]}" class="${S.rp === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
   <div class="card"><div class="fg"><div><label>ปีงบประมาณ</label><select id="rfy"><option value="">ทั้งหมด</option>${[0, 1, 2, 3, 4, 5].map(k => `<option value="${cur - k}" ${String(cur - k) === S.rf.fy ? 'selected' : ''}>${cur - k}</option>`).join('')}</select></div>
   <div><label>เดือน</label><select id="rmo"><option value="">ทั้งปี</option>${MN_NO.map((m, i) => `<option value="${m}" ${String(m) === S.rf.month ? 'selected' : ''}>${MN_FULL[i]}</option>`).join('')}</select></div>
-  ${S.rp === 'rcvreg' ? `<div><label>เวชภัณฑ์ (เว้นว่าง = ทั้งหมด)</label><input id="rdr" list="rdl" autocomplete="off" value="${esc(S.rf.drug)}"><datalist id="rdl">${ds.map(d => `<option value="${esc(d.name)} (${esc(d.unit)})"></option>`).join('')}</datalist></div><div><label>ผู้ขาย/เลขที่ใบส่งของ</label><input id="rsu" maxlength="80" value="${esc(S.rf.supplier)}"></div>` : ''}</div>
+  ${S.rp === 'rcvreg' ? `<div><label>เวชภัณฑ์</label><select id="rdr">${drugOpts(ds, 'ทั้งหมด', S.rf.drug)}</select></div>` : ''}${S.rp === 'rcvdoc' ? `<div><label>เลขที่ใบรับ (เว้นว่าง = ทุกใบ)</label><input id="rno" type="number" min="1" step="1" inputmode="numeric" value="${esc(S.rf.rcvNo)}"></div>` : ''}${S.rp === 'rcvreg' || S.rp === 'rcvdoc' ? `<div><label>ผู้ขาย / เลขที่ใบส่งของ</label><input id="rsu" maxlength="80" value="${esc(S.rf.supplier)}"></div>` : ''}</div>
   <div class="mf"><button class="btn" id="rgo">แสดงรายงาน</button></div></div><div id="rres"></div>`;
-  const keep = () => { S.rf.fy = $('#rfy').value; S.rf.month = $('#rmo').value; if (S.rp === 'rcvreg') { S.rf.drug = $('#rdr').value; S.rf.supplier = $('#rsu').value; } };
+  const keep = () => { S.rf.fy = $('#rfy').value; S.rf.month = $('#rmo').value; if (S.rp === 'rcvreg') S.rf.drug = $('#rdr').value; if (S.rp === 'rcvdoc') S.rf.rcvNo = $('#rno').value; if ($('#rsu')) S.rf.supplier = $('#rsu').value; };
   const params = () => {
     keep(); let drugId = '';
-    if (S.rp === 'rcvreg' && S.rf.drug.trim()) { const d = ds.find(x => x.name + ' (' + x.unit + ')' === S.rf.drug); if (!d) throw new Error('กรุณาเลือกเวชภัณฑ์จากรายการที่แนะนำ หรือเว้นว่างเพื่อดูทั้งหมด'); drugId = d.drugId; }
-    return { rpt: S.rp, fy: S.rf.fy, month: S.rf.month, drugId: drugId, supplier: S.rp === 'rcvreg' ? S.rf.supplier : '' };
+    if (S.rp === 'rcvreg') drugId = S.rf.drug || '';
+    return { rpt: S.rp, fy: S.rf.fy, month: S.rf.month, drugId: drugId, supplier: S.rp === 'rcvreg' || S.rp === 'rcvdoc' ? S.rf.supplier : '', rcvNo: S.rp === 'rcvdoc' ? S.rf.rcvNo : '' };
   };
   const run = () => act($('#rgo'), async () => { const p = params(); showReport(await call('report', p), p); });
   $('#rgo').onclick = run;
   el.querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { keep(); S.rp = b.dataset.rt; go('reports'); });
   run();
 };
+/** ใบรับยา 1 ใบ (หลังบันทึก หรือเปิดจากรายงาน) พร้อมพิมพ์ / PDF / Word */
+async function rcvDocModal(no, fy) {
+  const p = { kind: 'report', rpt: 'rcvdoc', fy: String(fy), month: '', rcvNo: String(no) }, rep = await call('report', p), html = repHtml(rep);
+  const m = modal('ใบรับยาเลขที่ ' + no + '/' + fy, `<div class="tw" style="border:0">${html}</div><div class="mf"><button class="btn sec" id="p1">พิมพ์ (A4)</button><button class="btn sec" id="p2">ดาวน์โหลด PDF</button><button class="btn sec" id="p3">ดาวน์โหลด Word</button></div>`, { wide: true });
+  $id(m, 'p1').onclick = () => printHtml(html); $id(m, 'p2').onclick = b => act(b.target, () => download(p, 'pdf')); $id(m, 'p3').onclick = b => act(b.target, () => download(p, 'docx'));
+}
 function repHtml(rep) {
   const tb = t => (t.title ? `<div style="font-weight:700;margin:10px 0 4px">${esc(t.title)}</div>` : '') + `<table><thead><tr>${t.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${t.rows.map(r => `<tr>${r.map((c, i) => `<td style="text-align:${t.aligns[i] === 'r' ? 'right' : t.aligns[i] === 'c' ? 'center' : 'left'}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   return `<div class="sheet"><div class="t1">${esc(rep.title)}</div>${rep.sub.map(s => `<div class="t2" style="font-weight:400">${esc(s)}</div>`).join('')}<div class="t2">${rep.stats.map(s => esc(s[0]) + ' ' + esc(s[1])).join(' &nbsp;&nbsp;&nbsp; ')}</div>${rep.tables.filter(t => !t.ui).map(tb).join('')}${rep.sigs ? `<div class="sigs" style="grid-template-columns:repeat(${rep.sigs.length},1fr)">${rep.sigs.map(s => `<div>ลงชื่อ ........................................ (${esc(s[0])})<br>( ${s[1] ? esc(s[1]) : '&nbsp;'.repeat(30)} )</div>`).join('')}</div>` : ''}</div>`;
