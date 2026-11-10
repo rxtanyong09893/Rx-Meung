@@ -181,7 +181,7 @@ function homeGo(k) {
   if (a[0] === 'wh') return go('warehouse');
   if (a[0] === 'loan') { S.lt = a[1]; return go('loans'); }
   if (a[0] === 'me') {
-    const o = {}; if (a[1] === 'month') o.month = String(+todayIso().slice(5, 7)); if (a[1] === 'reach') o.sev = 'REACH'; if (a[1] === 'harm') o.sev = 'HARM'; if (a[1] === 't') o.type = a[2];
+    const o = {}; if (a[1] === 'month') o.month = String(+todayIso().slice(5, 7)); if (a[1] === 'reach') o.sev = 'REACH'; if (a[1] === 'harm') o.sev = 'HARM'; if (a[1] === 't') o.type = a[2]; if (a[1] === 's') o.sev = a[2]; if (a[1] === 'm') o.month = a[2]; if (a[1] === 'h') o.hosp = a[2];
     S.mf = Object.assign({ fy: String(curFY()), month: '', hosp: '', sev: '', type: '' }, o); return go('me');
   }
 }
@@ -194,11 +194,11 @@ VIEWS.home = async el => {
     el.innerHTML = `<div class="hh"><h2>สวัสดี ${esc(S.user.name)}</h2><span class="mut">${esc(S.user.hospName)} · ปีงบประมาณ ${d.fy}</span></div>
     ${sec('file', 'การเบิกยา', '<button class="btn sm" id="hNew">+ ขอเบิกยา</button>',
       `<div class="tiles">${tile(c.pending || 0, 'คำขอรออนุมัติ', c.pending ? 'w' : '', 'req:pending')}${tile(c.approved || 0, 'อนุมัติแล้ว', '', 'req:approved')}${tile(c.rejected || 0, 'ไม่อนุมัติ', c.rejected ? 'd' : '', 'req:rejected')}</div>${pl('คำขอเบิกล่าสุด', ['req:all', 'ดูทั้งหมด'])}${reqTable(d.recent)}`)}
-    ${sec('swap', 'การยืม-คืนยา', '<button class="btn sec sm" id="hBor">+ ขอยืมยา</button>',
+    ${sec('swap', 'การยืม-คืนยา', '<span class="row" style="gap:6px"><button class="btn sec sm" id="hLend">+ บันทึกการให้ยืม</button><button class="btn sec sm" id="hBor">+ ขอยืมยา</button></span>',
       `<div class="tiles">${tile(L.borrowedCount || 0, 'ยืมอยู่ (ยังไม่คืน)', L.borrowedCount ? 'w' : '', 'loan:bor')}${tile(L.lentCount || 0, 'ให้ยืมอยู่ (ยังไม่ได้รับคืน)', L.lentCount ? 'b' : '', 'loan:len')}${tile(L.waiting || 0, 'คำขอยืมรอพิจารณา', '', 'loan:wait')}${tile(L.todo || 0, 'รอคุณพิจารณา (หน่วยอื่นขอยืม)', L.todo ? 'w' : '', 'loan:todo')}</div>
       ${hasL ? `<div class="grid2"><div>${pl('ยาที่เรายืมจากหน่วยบริการอื่น')}${loanLine(L.borrowed || [], 'ยืมจาก')}</div><div>${pl('ยาที่เราให้ยืมไป')}${loanLine(L.lent || [], 'ให้ยืมแก่')}</div></div>` : ''}`)}
     ${meHomeHtml(d.me)}`;
-    $('#hNew').onclick = () => go('req_new'); $('#hBor').onclick = loanNew; $('#hMe').onclick = () => meNew(() => go('home'));
+    $('#hNew').onclick = () => go('req_new'); $('#hBor').onclick = () => loanNew(); $('#hLend').onclick = () => loanNew('lend'); $('#hMe').onclick = () => meNew(() => go('home'));
   } else {
     const lowTbl = (rows, key, head, col) => rows.length ? tbl([['รายการ'], [head, 'r']], rows.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${fmt(x[key])} ${esc(x.unit)}</td></tr>`).join('')) : empty('ไม่มี');
     el.innerHTML = `<div class="hh"><h2>ภาพรวมคลังยา</h2><span class="mut">ปีงบประมาณ ${d.fy}</span></div>
@@ -558,20 +558,21 @@ VIEWS.loans = async el => {
   const tabs = adm ? [['all', 'ทั้งหมด'], ['open', 'ยังไม่เสร็จสิ้น'], ['late', 'ยังค้างคืน']] : [['todo', 'รอคุณพิจารณา'], ['wait', 'รอผู้ให้ยืมพิจารณา'], ['bor', 'ยืมอยู่'], ['len', 'ให้ยืมอยู่'], ['all', 'ทั้งหมด']];
   if (!tabs.some(t => t[0] === S.lt)) S.lt = tabs[0][0];
   const F = { all: () => true, open: r => r.open, late: r => r.overdue, todo: r => r.todo, in: r => r.role === 'borrower', out: r => r.role === 'lender', wait: r => r.role === 'borrower' && r.status === 'requested', bor: r => r.role === 'borrower' && r.status === 'active' && r.outstanding > 0, len: r => r.role === 'lender' && r.status === 'active' && r.outstanding > 0 }, list = rows.filter(F[S.lt]);
-  el.innerHTML = `<div class="row sp"><h2>ยืม-คืนยาระหว่างหน่วยบริการ</h2>${adm ? '' : '<button class="btn" id="lnew">+ ขอยืมยา</button>'}</div>
+  el.innerHTML = `<div class="row sp"><h2>ยืม-คืนยาระหว่างหน่วยบริการ</h2>${adm ? '' : '<div class="row"><button class="btn sec" id="llend">+ บันทึกการให้ยืม</button><button class="btn" id="lnew">+ ขอยืมยา</button></div>'}</div>
   <div class="row" style="margin:8px 0"><button class="btn sec sm" id="lrOut">${adm ? 'ทะเบียนการให้ยืม' : 'ทะเบียนที่เราให้ยืม'}</button><button class="btn sec sm" id="lrIn">${adm ? 'ทะเบียนการยืม' : 'ทะเบียนที่เรายืมหน่วยบริการอื่น'}</button></div>
   <div class="seg">${tabs.map(t => `<button data-lt="${t[0]}" class="${S.lt === t[0] ? 'on' : ''}">${t[1]} (${rows.filter(F[t[0]]).length})</button>`).join('')}</div>
-  ${list.length ? tbl([['เลขที่'], ['วันที่ขอ'], ['ผู้ให้ยืม'], ['ผู้ยืม'], ['รายการ', 'c'], ['วันที่คืนจริง'], ['สถานะ']], list.map(r => `<tr class="clk" data-ln="${esc(r.loanId)}"><td>${esc(r.loanId)}${r.todo ? ' <span class="badge b-pending">รอคุณ</span>' : ''}</td><td>${thDate(r.createdAt.slice(0, 10))}</td><td>${esc(r.lenderName)}</td><td>${esc(r.borrowerName)}</td><td class="c">${r.itemCount}</td><td>${r.returnDates && r.returnDates.length ? r.returnDates.map(thDate).join('<br>') : '-'}</td><td>${lbadge(r.status)}</td></tr>`).join('')) : empty('ไม่มีรายการ')}`;
+  ${list.length ? tbl([['เลขที่'], ['วันที่ขอ'], ['ผู้ให้ยืม'], ['ผู้ยืม'], ['รายการ', 'c'], ['วันที่คืน'], ['สถานะ']], list.map(r => `<tr class="clk" data-ln="${esc(r.loanId)}"><td>${esc(r.loanId)}${r.todo ? ' <span class="badge b-pending">รอคุณ</span>' : ''}</td><td>${thDate(r.createdAt.slice(0, 10))}</td><td>${esc(r.lenderName)}</td><td>${esc(r.borrowerName)}</td><td class="c">${r.itemCount}</td><td>${r.returnDates && r.returnDates.length ? r.returnDates.map(thDate).join('<br>') : '-'}</td><td>${lbadge(r.status)}</td></tr>`).join('')) : empty('ไม่มีรายการ')}`;
   el.querySelectorAll('[data-lt]').forEach(b => b.onclick = () => { S.lt = b.dataset.lt; go('loans'); });
   el.querySelectorAll('[data-ln]').forEach(r => r.onclick = () => openLoan(r.dataset.ln));
-  if ($('#lnew')) $('#lnew').onclick = loanNew;
+  if ($('#lnew')) $('#lnew').onclick = () => loanNew(); if ($('#llend')) $('#llend').onclick = () => loanNew('lend');
   $('#lrOut').onclick = () => loanRegModal('out'); $('#lrIn').onclick = () => loanRegModal('in');
 };
-function loanNew() {
-  const H = S.meta.hospitals.filter(h => h.code !== S.user.hospCode);
-  const m = modal('ขอยืมยาจากหน่วยบริการอื่น', `<div class="fg"><div><label>ยืมจาก</label><select id="ll"><option value="">— เลือกหน่วยบริการ —</option>${H.map(h => `<option value="${esc(h.code)}">${esc(h.name)}</option>`).join('')}</select></div></div>
-  <label>รายการยาที่ขอยืม (กรอกชื่อยา จำนวน และหน่วย)</label><div id="lrows"></div><button class="btn sec sm" id="ladd" style="margin-top:6px">+ เพิ่มรายการ</button>
-  <label>หมายเหตุ (ถ้ามี)</label><textarea id="lno" maxlength="200" rows="2"></textarea><div class="mf"><button class="btn sec" data-close>ยกเลิก</button><button class="btn" id="lsv">ส่งคำขอยืม</button></div>`, { wide: true });
+/** mode 'lend' = ผู้ให้ยืมบันทึกการให้ยืมเอง (ผู้ยืมไม่ได้ส่งคำขอ) ใบยืมมีผลทันที · ไม่ระบุ = ผู้ยืมส่งคำขอยืม */
+function loanNew(mode) {
+  const lend = mode === 'lend', H = S.meta.hospitals.filter(h => h.code !== S.user.hospCode);
+  const m = modal(lend ? 'บันทึกการให้ยืมยา' : 'ขอยืมยาจากหน่วยบริการอื่น', `${lend ? '<div class="msg o" style="margin:0 0 8px">ใช้เมื่อหน่วยบริการที่มายืมไม่ได้ส่งคำขอยืมในระบบ · บันทึกแล้วมีผลทันที (สถานะ "ยืมอยู่") หน่วยที่ยืมจะเห็นรายการนี้ด้วย · เมื่อได้รับยาคืน บันทึกการคืนได้ทั้งสองฝ่าย</div>' : ''}<div class="fg"><div><label>${lend ? 'ให้ยืมแก่' : 'ยืมจาก'}</label><select id="ll"><option value="">— เลือกหน่วยบริการ —</option>${H.map(h => `<option value="${esc(h.code)}">${esc(h.name)}</option>`).join('')}</select></div></div>
+  <label>${lend ? 'รายการยาที่ให้ยืม (กรอกชื่อยา จำนวนที่ให้ไป และหน่วย)' : 'รายการยาที่ขอยืม (กรอกชื่อยา จำนวน และหน่วย)'}</label><div id="lrows"></div><button class="btn sec sm" id="ladd" style="margin-top:6px">+ เพิ่มรายการ</button>
+  <label>หมายเหตุ (ถ้ามี)</label><textarea id="lno" maxlength="200" rows="2"></textarea><div class="mf"><button class="btn sec" data-close>ยกเลิก</button><button class="btn" id="lsv">${lend ? 'บันทึกการให้ยืม' : 'ส่งคำขอยืม'}</button></div>`, { wide: true });
   const add = () => { const r = document.createElement('div'); r.className = 'row'; r.setAttribute('data-lr', '1'); r.style.marginBottom = '6px'; r.innerHTML = '<input class="grow" placeholder="ชื่อยา" data-n maxlength="80" autocomplete="off"><input type="number" min="1" step="1" inputmode="numeric" placeholder="จำนวน" data-q style="width:100px"><select data-u style="width:120px"><option value="">— หน่วย —</option>' + UNITS.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('') + '</select>'; $id(m, 'lrows').appendChild(r); };
   add(); $id(m, 'ladd').onclick = add;
   $id(m, 'lsv').onclick = b => act(b.target, async () => {
@@ -579,20 +580,20 @@ function loanNew() {
       const n = r.querySelector('[data-n]').value, q = r.querySelector('[data-q]').value, u = r.querySelector('[data-u]').value; if (!n.trim() && !q && !u.trim()) return;
       items.push({ name: n, qty: q, unit: u });
     });
-    const r = await call('loanCreate', { lender: val(m, 'll'), note: val(m, 'lno'), items: items });
-    m.remove(); toast('ส่งคำขอยืมแล้ว เลขที่ ' + r.loanId); go('loans');
+    const r = lend ? await call('loanLend', { borrower: val(m, 'll'), note: val(m, 'lno'), items: items }) : await call('loanCreate', { lender: val(m, 'll'), note: val(m, 'lno'), items: items });
+    m.remove(); toast((lend ? 'บันทึกการให้ยืมแล้ว เลขที่ ' : 'ส่งคำขอยืมแล้ว เลขที่ ') + r.loanId); S.lt = lend ? 'len' : 'wait'; go('loans');
   });
 }
 async function openLoan(id) {
   const d = await call('loanDetail', { loanId: id }), l = d.loan, adm = l.role === 'admin', isL = adm || l.role === 'lender', isB = adm || l.role === 'borrower';
   const kv = (k, v) => v ? `<b>${k}</b><span>${v}</span>` : '';
-  const head = `<div class="kv">${kv('เลขที่', esc(l.loanId) + ' ' + lbadge(l.status))}${kv('ผู้ให้ยืม', esc(l.lenderName))}${kv('ผู้ยืม', esc(l.borrowerName))}${kv('วันที่ขอ', thDT(l.createdAt) + ' โดย ' + esc(l.createdBy))}${kv('วันที่คืนจริง', d.returns.length ? d.returns.map(r => thDate(r.createdAt.slice(0, 10))).filter((x, i, a) => a.indexOf(x) === i).join(', ') : '-')}${kv('หมายเหตุ', esc(l.note))}${kv('ผู้อนุมัติให้ยืม', l.decidedBy ? esc(l.decidedBy) + ' ' + thDT(l.decidedAt) : '')}${kv('เหตุผล', esc(l.reason))}</div>`;
+  const head = `<div class="kv">${kv('เลขที่', esc(l.loanId) + ' ' + lbadge(l.status) + (l.origin === 'lender' ? ' <span class="badge b-processing">บันทึกโดยผู้ให้ยืม</span>' : ''))}${kv('ผู้ให้ยืม', esc(l.lenderName))}${kv('ผู้ยืม', esc(l.borrowerName))}${kv(l.origin === 'lender' ? 'วันที่ให้ยืม' : 'วันที่ขอ', thDT(l.createdAt) + ' โดย ' + esc(l.createdBy))}${kv('วันที่คืน', d.returns.length ? d.returns.map(r => thDate(r.createdAt.slice(0, 10))).filter((x, i, a) => a.indexOf(x) === i).join(', ') : '-')}${kv('หมายเหตุ', esc(l.note))}${kv('ผู้อนุมัติให้ยืม', l.decidedBy ? esc(l.decidedBy) + ' ' + thDT(l.decidedAt) : '')}${kv('เหตุผล', esc(l.reason))}</div>`;
   const its = tbl([['รายการยา'], ['หน่วย'], ['ขอยืม', 'r'], ['ให้ยืม', 'r'], ['คืนแล้ว', 'r'], ['ค้างคืน', 'r']], d.items.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.unit)}</td><td class="r">${fmt(i.qtyReq)}</td><td class="r">${fmt(i.qtyLent)}</td><td class="r">${fmt(i.qtyReturned)}</td><td class="r">${l.status === 'active' ? fmt(i.outstanding) : '-'}</td></tr>`).join(''));
   const rets = d.returns.length ? '<h3 style="margin:14px 0 6px">ประวัติการคืน</h3>' + d.returns.map(r => `<div class="card" style="padding:10px"><div class="mut">${thDT(r.createdAt)} โดย ${esc(r.createdBy)}</div><div>${r.items.map(x => `${esc(x.name)} ${fmt(x.qty)} ${esc(x.unit)}`).join('<br>')}</div>${r.note ? `<div class="mut">หมายเหตุ: ${esc(r.note)}</div>` : ''}</div>`).join('') : '';
   const btn = [];
   if (l.status === 'requested' && isL) btn.push('<button class="btn" id="bDec">พิจารณา / อนุมัติ</button>');
   if (l.status === 'requested' && isB) btn.push('<button class="btn bad" id="bCan">ยกเลิกคำขอ</button>');
-  if (l.status === 'active' && isB) btn.push('<button class="btn" id="bRet">คืนยา</button>');
+  if (l.status === 'active' && (isB || isL)) btn.push(`<button class="btn" id="bRet">${isB ? 'คืนยา' : 'บันทึกรับยาคืน'}</button>`);
   if (adm && (l.status === 'requested' || l.status === 'active')) btn.push('<button class="btn sec" id="bCls">ปิดรายการ (แอดมิน)</button>');
   const m = modal('รายการยืม-คืนยา ' + id, head + its + rets + `<div class="mf">${btn.join('')}<button class="btn sec" id="bPr">พิมพ์</button><button class="btn sec" id="bPd">PDF</button><button class="btn sec" id="bWd">Word</button></div>`, { wide: true });
   const on = (i, fn) => { const e = $id(m, i); if (e) e.onclick = b => act(b.target, fn); };
@@ -612,7 +613,7 @@ function loanDecideModal(d, parent) {
 }
 function loanReturnModal(d, parent) {
   const l = d.loan, open = d.items.filter(i => i.outstanding > 0);
-  const m = modal('คืนยา ' + l.loanId, `<p class="mut">ระบุจำนวนที่คืนครั้งนี้ (คืนทีละส่วนได้) ยอดคืนจะถูกนับทันที และรายการจะปิดเมื่อคืนครบทุกรายการ</p><div class="tw"><table><thead><tr><th>รายการยา</th><th class="r">ค้างคืน</th><th class="r">คืนครั้งนี้</th></tr></thead><tbody>${qtyRows(open, 'out')}</tbody></table></div><label>หมายเหตุ</label><input id="rn" maxlength="200"><div class="mf"><button class="btn" id="rs">ยืนยันคืนยา</button></div>`, { wide: true });
+  const m = modal((l.role === 'lender' ? 'บันทึกรับยาคืน ' : 'คืนยา ') + l.loanId, `<p class="mut">ระบุจำนวนที่คืนครั้งนี้ (คืนทีละส่วนได้) ยอดคืนจะถูกนับทันที และรายการจะปิดเมื่อคืนครบทุกรายการ</p><div class="tw"><table><thead><tr><th>รายการยา</th><th class="r">ค้างคืน</th><th class="r">คืนครั้งนี้</th></tr></thead><tbody>${qtyRows(open, 'out')}</tbody></table></div><label>หมายเหตุ</label><input id="rn" maxlength="200"><div class="mf"><button class="btn" id="rs">ยืนยันคืนยา</button></div>`, { wide: true });
   $id(m, 'rs').onclick = b => act(b.target, async () => { const r = await call('loanReturn', { loanId: l.loanId, items: qtyOf(m, open), note: val(m, 'rn') }); m.remove(); parent.remove(); toast(r.closed ? 'คืนครบแล้ว ปิดรายการ' : 'บันทึกการคืนแล้ว'); go('loans'); openLoan(l.loanId); });
 }
 function loanRegModal(type) {
@@ -693,13 +694,64 @@ const meMoOpts = sel => '<option value="">ทั้งปี</option>' + MN_NO.m
 const meHospOpts = sel => '<option value="">ทุกหน่วยบริการ</option>' + S.meta.hospitals.map(h => `<option value="${esc(h.code)}" ${h.code === sel ? 'selected' : ''}>${esc(h.name)}</option>`).join('');
 /** ส่วนสถิติ ME สำหรับหน้าหลัก (d.me จาก dashboard) — การ์ดและชิปประเภทกดแล้วไปหน้า ME พร้อมตัวกรอง */
 const ME_SHORT = { presc: 'Prescribing', trans: 'Transcribing', pre: 'Pre-dispensing', disp: 'Dispensing', admin: 'Administration' };
+/* ---- กราฟสถิติ ME (HTML/CSS ล้วน ไม่ใช้ไลบรารี) ----
+   สีตามกลุ่มความรุนแรง NCC MERP: A-B ยังไม่ถึงผู้ป่วย / C-D ถึงผู้ป่วยแต่ไม่เกิดอันตราย / E-I เกิดอันตราย (มีป้ายตัวเลขและคำอธิบายกำกับเสมอ) */
+const ME_G = [['ab', 'A-B ยังไม่ถึงผู้ป่วย', '#16967d'], ['cd', 'C-D ถึงผู้ป่วย ไม่เกิดอันตราย', '#e09a1a'], ['ei', 'E-I เกิดอันตราย', '#d13f3f']];
+const meGrp = s => 'AB'.indexOf(s) >= 0 ? 'ab' : 'CD'.indexOf(s) >= 0 ? 'cd' : 'ei';
+const meCol = k => ME_G.find(g => g[0] === k)[2];
+function meCss() {
+  if (document.getElementById('meCss')) return;
+  const st = document.createElement('style'); st.id = 'meCss';
+  st.textContent = `.mch{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));margin-top:10px}
+.mcc{border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#fff;min-width:0}
+.mcc h4{margin:0 0 6px;font-size:.9rem;font-weight:600;color:var(--g1);display:flex;justify-content:space-between;gap:8px}.mcc h4 small{font-weight:400;color:var(--mut)}
+.mleg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:.76rem;color:var(--mut);margin:0 0 6px}.mleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.vch{display:flex;align-items:flex-end;gap:4px;height:118px;border-bottom:1px solid #b9cfc8;padding-top:14px}
+.vcol{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;border:0;background:none;padding:0;cursor:pointer;position:relative}
+.vcol:hover .vst{opacity:.85}.vcol:focus-visible{outline:2px solid var(--g2)}
+.vst{display:flex;flex-direction:column-reverse;gap:2px;width:72%;margin:0 auto}.vst span{display:block}.vst span:last-child{border-radius:4px 4px 0 0}
+.vnum{font-size:.72rem;color:var(--ink);text-align:center;line-height:1.2;font-variant-numeric:tabular-nums}
+.vlab{display:flex;gap:4px;margin-top:3px}.vlab span{flex:1;min-width:0;text-align:center;font-size:.68rem;color:var(--mut);white-space:nowrap;overflow:hidden}
+.hbr{display:grid;grid-template-columns:minmax(80px,40%) 1fr 3.2em;gap:8px;align-items:center;font-size:.84rem;padding:2px 0;width:100%;border:0;background:none;text-align:left;color:var(--ink)}
+button.hbr{cursor:pointer;border-radius:4px}button.hbr:hover{background:var(--g4)}button.hbr:focus-visible{outline:2px solid var(--g2)}
+.hbr .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hbr .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.hbr .tr{height:12px;display:flex;gap:2px;min-width:0}.hbr .tr span{height:100%;display:block}.hbr .tr span:last-child{border-radius:0 4px 4px 0}
+.hbr.z{color:var(--mut)}.hbr.z .v{font-weight:400}`;
+  document.head.appendChild(st);
+}
+const meLegend = () => `<div class="mleg">${ME_G.map(g => `<span><i style="background:${g[2]}"></i>${g[1]}</span>`).join('')}</div>`;
+/** แท่งแนวนอน: rows = [{ label, parts: [[groupKey, n], …] หรือ n, go, title }] */
+function hBars(rows, color) {
+  const tot = r => Array.isArray(r.parts) ? r.parts.reduce((a, p) => a + p[1], 0) : r.parts, mx = Math.max(1, ...rows.map(tot));
+  return rows.map(r => { const t = tot(r), segs = Array.isArray(r.parts) ? r.parts.filter(p => p[1] > 0).map(p => `<span style="width:${p[1] / mx * 100}%;background:${meCol(p[0])}" title="${esc(ME_G.find(g => g[0] === p[0])[1])}: ${p[1]}"></span>`).join('') : (t ? `<span style="width:${t / mx * 100}%;background:${color}"></span>` : '');
+    const tag = r.go ? 'button type="button"' : 'div';
+    return `<${tag} class="hbr ${t ? '' : 'z'}"${r.go ? ` data-g="${esc(r.go)}"` : ''} title="${esc(r.title || r.label + ': ' + t + ' รายการ')}"><span class="lb">${esc(r.label)}</span><span class="tr">${segs}</span><span class="v">${fmt(t)}</span></${r.go ? 'button' : 'div'}>`; }).join('');
+}
+function meCharts(me) {
+  meCss();
+  const adm = S.user.role === 'admin', bm = me.byMonth || [], mx = Math.max(1, ...bm.map(m => m.ab + m.cd + m.ei)), H = 86, cur = +todayIso().slice(5, 7);
+  const months = `<div class="vch">${bm.map((m, i) => { const t = m.ab + m.cd + m.ei;
+    return `<button type="button" class="vcol" data-g="me:m:${m.mo}" title="${MN_SHORT[i]}: ทั้งหมด ${t} (A-B ${m.ab}, C-D ${m.cd}, E-I ${m.ei})">${t ? `<div class="vnum">${t}</div>` : ''}<div class="vst">${ME_G.map(g => m[g[0]] ? `<span style="height:${Math.max(3, m[g[0]] / mx * H)}px;background:${g[2]}"></span>` : '').join('')}</div></button>`; }).join('')}</div>
+    <div class="vlab">${MN_SHORT.map((n, i) => `<span style="${bm[i] && bm[i].mo === cur ? 'color:var(--g1);font-weight:600' : ''}">${n}</span>`).join('')}</div>`;
+  const total = me.total || 0, pct = n => total ? Math.round(n / total * 100) + '%' : '';
+  const sev = hBars((me.bySev || []).map(x => ({ label: 'ระดับ ' + x.sev + (x.count ? '  (' + pct(x.count) + ')' : ''), parts: [[meGrp(x.sev), x.count]], go: 'me:s:' + x.sev, title: 'ระดับ ' + x.sev + ' ' + (ME_SEV[x.sev] || '') + ': ' + x.count + ' รายการ ' + pct(x.count) })));
+  const types = hBars(me.byType.map(t => ({ label: ME_SHORT[t.key] || t.name, parts: t.count, go: 'me:t:' + t.key, title: (ME_SHORT[t.key] || t.name) + ' (' + (ME_TYPE_TH[t.key] || '') + '): ' + t.count + ' รายการ' })), '#1d5fa8');
+  const drugs = (me.topDrugs || []).length ? hBars(me.topDrugs.map(d => ({ label: d.name, parts: d.count })), '#5b7069') : '<div class="mut" style="font-size:.85rem">ยังไม่มีข้อมูล</div>';
+  const kinds = (me.topKinds || []).length ? hBars(me.topKinds.map(d => ({ label: d.name, parts: d.count })), '#5b7069') : '<div class="mut" style="font-size:.85rem">ยังไม่มีข้อมูล</div>';
+  const hosp = adm ? `<div class="mcc" style="grid-column:1/-1"><h4>ME รายหน่วยบริการ <small>คลิกเพื่อดูรายการของหน่วย</small></h4>${meLegend()}${hBars((me.byHosp || []).map(h => ({ label: h.name, parts: [['ab', h.count - h.reach - h.harm], ['cd', h.reach], ['ei', h.harm]], go: 'me:h:' + h.code, title: h.name + ': ทั้งหมด ' + h.count + ' (E-I ' + h.harm + ')' })))}</div>` : '';
+  return `<div class="mch">
+    <div class="mcc"><h4>ME รายเดือน <small>ปีงบประมาณนี้</small></h4>${meLegend()}${months}</div>
+    <div class="mcc"><h4>ระดับความรุนแรง (NCC MERP) <small>ร้อยละของทั้งหมด</small></h4>${sev}</div>
+    <div class="mcc"><h4>ประเภทความคลาดเคลื่อน</h4>${types}</div>
+    <div class="mcc"><h4>ยาที่เกิด ME บ่อย <small>5 อันดับ</small></h4>${drugs}<h4 style="margin-top:10px">ชนิดที่พบบ่อย <small>5 อันดับ</small></h4>${kinds}</div>
+    ${hosp}</div>`;
+}
 function meHomeHtml(me) {
   me = me || { total: 0, month: 0, reach: 0, harm: 0, byType: [] };
   const adm = S.user.role === 'admin';
   return `<section class="pn"><div class="ph"><h3>${ico('alert')}ความคลาดเคลื่อนทางยา (ME) <small class="mut">ปีงบประมาณนี้</small></h3>${adm ? '' : '<button class="btn sm" id="hMe" style="background:var(--warn)">+ บันทึก ME</button>'}</div>
   <div class="tiles">${tile(me.total, 'ME ทั้งหมด', me.total ? 'b' : '', 'me:all')}${tile(me.month, 'ME เดือนนี้', '', 'me:month')}${tile(me.reach, 'ถึงผู้ป่วย (C-I)', me.reach ? 'w' : '', 'me:reach')}${tile(me.harm, 'เกิดอันตราย (E-I)', me.harm ? 'd' : '', 'me:harm')}</div>
-  <div class="chips">${me.byType.map(t => `<button type="button" class="chp ${t.count ? '' : 'z'}" data-g="me:t:${t.key}" title="${esc(ME_TYPE_TH[t.key] || '')}"><span>${esc(ME_SHORT[t.key] || t.name)}</span><b>${t.count}</b></button>`).join('')}</div>
-  ${adm && (me.byHosp || []).length ? `<div class="pl" style="margin-top:8px"><span>หน่วยบริการที่มี ME สูงสุด</span></div>${tbl([['หน่วยบริการ'], ['ME', 'r'], ['E-I', 'r']], me.byHosp.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${fmt(x.count)}</td><td class="r">${fmt(x.harm)}</td></tr>`).join(''))}` : ''}</section>`;
+  ${me.total ? meCharts(me) : '<div class="empty">ยังไม่มีการบันทึก ME ในปีงบประมาณนี้ — เมื่อมีการบันทึก กราฟสถิติจะแสดงที่นี่</div>'}</section>`;
 }
 
 VIEWS.me = async el => {
@@ -727,11 +779,12 @@ function meNew(after) {
   <div class="fg"><div><label>ชื่อยา (ที่สั่ง/ที่ควรได้รับ)</label><input id="mdr" maxlength="120" autocomplete="off"></div><div><label>ยาคู่ที่เกิดความคลาดเคลื่อน (ถ้ามี เช่น จ่ายผิดเป็นยาอะไร)</label><input id="mdp" maxlength="120" autocomplete="off"></div></div>
   <label>รายละเอียดเหตุการณ์</label><textarea id="mdt" maxlength="500" rows="3"></textarea>
   <label>การแก้ไข/แนวทางป้องกัน</label><textarea id="mac" maxlength="300" rows="2"></textarea>
+  <div class="fg"><div><label>ผู้รายงาน</label><input id="mrp" maxlength="80" value="${esc(S.user.name)}" autocomplete="off"></div></div>
   <div class="msg" style="background:#fef3c7;color:#92400e">กรอกเฉพาะ HN ห้ามระบุชื่อ-นามสกุลผู้ป่วยในช่องข้อความ</div>
   <div class="mf"><button class="btn sec" data-close>ยกเลิก</button><button class="btn" id="msv2">บันทึก</button></div>`, { wide: true });
   $id(m, 'mt').onchange = () => { $id(m, 'mk').innerHTML = meKindOpts(val(m, 'mt')); };
   $id(m, 'msv2').onclick = b => act(b.target, async () => {
-    const r = await call('meCreate', { date: val(m, 'md'), hn: val(m, 'mh'), errType: val(m, 'mt'), errKind: val(m, 'mk'), severity: val(m, 'ms'), drugName: val(m, 'mdr'), drugPair: val(m, 'mdp'), detail: val(m, 'mdt'), action: val(m, 'mac') });
+    const r = await call('meCreate', { date: val(m, 'md'), hn: val(m, 'mh'), errType: val(m, 'mt'), errKind: val(m, 'mk'), severity: val(m, 'ms'), drugName: val(m, 'mdr'), drugPair: val(m, 'mdp'), detail: val(m, 'mdt'), action: val(m, 'mac'), reporter: val(m, 'mrp') });
     m.remove(); toast('บันทึก ME แล้ว เลขที่ ' + r.meId); if (after) after(); else go('me');
   });
 }

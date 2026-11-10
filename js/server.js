@@ -238,7 +238,7 @@ function loanGet_(u, id) {
   const l = readLoans_().find(x => x.loanId === String(id)); if (!l) fail_('ไม่พบรายการยืม');
   const role = loanRole_(u, l); if (!role) fail_('ไม่มีสิทธิ์ดูรายการนี้'); return { l: l, role: role };
 }
-/** วันที่คืนจริง: ทั้งใบ (loanId) หรือเฉพาะรายการ (loanId + lineNo) — คืนหลายครั้งแสดงทุกวันที่ */
+/** วันที่คืน: ทั้งใบ (loanId) หรือเฉพาะรายการ (loanId + lineNo) — คืนหลายครั้งแสดงทุกวันที่ */
 function retDates_(loanId, lineNo) {
   const rs = readAll_('LoanReturns').filter(r => r.loanId === loanId), rl = lineNo == null ? null : readAll_('LoanReturnLines');
   const ds = rs.filter(r => !rl || rl.some(x => x.retId === r.retId && x.lineNo === lineNo)).map(r => String(r.createdAt).slice(0, 10)).sort();
@@ -250,7 +250,7 @@ function loanRows_(u) {
   const loans = readLoans_(), lines = readAll_('LoanLines'), today = today_();
   return loans.filter(l => u.role === 'admin' || l.lender === u.hospCode || l.borrower === u.hospCode).sort((a, b) => a.loanId < b.loanId ? 1 : -1).slice(0, 500).map(l => {
     const its = lines.filter(i => i.loanId === l.loanId), out = its.reduce((s, i) => s + Math.max(0, i.qtyLent - i.qtyReturned), 0), role = loanRole_(u, l);
-    return { loanId: l.loanId, createdAt: l.createdAt, lender: l.lender, borrower: l.borrower, lenderName: hospOf_(l.lender).name, borrowerName: hospOf_(l.borrower).name, dueDate: l.dueDate, status: l.status, itemCount: its.length, outstanding: out, role: role,
+    return { loanId: l.loanId, createdAt: l.createdAt, lender: l.lender, borrower: l.borrower, lenderName: hospOf_(l.lender).name, borrowerName: hospOf_(l.borrower).name, dueDate: l.dueDate, status: l.status, itemCount: its.length, outstanding: out, role: role, origin: l.origin || 'borrower',
       returnDates: retDates_(l.loanId), overdue: l.status === 'active' && out > 0, open: l.status === 'requested' || l.status === 'active', todo: role === 'lender' && l.status === 'requested' };
   });
 }
@@ -269,19 +269,19 @@ function loanDetail_(u, p) {
   const rl = readAll_('LoanReturnLines');
   const returns = readAll_('LoanReturns').filter(r => r.loanId === l.loanId).sort((a, b) => a.retId < b.retId ? -1 : 1).map(r => ({ retId: r.retId, createdAt: r.createdAt, createdBy: r.createdBy, note: r.note, items: rl.filter(x => x.retId === r.retId).map(x => ({ name: x.name, unit: x.unit, qty: x.qty })) }));
   const out = items.reduce((s, i) => s + i.outstanding, 0);
-  return { loan: { loanId: l.loanId, createdAt: l.createdAt, lender: l.lender, borrower: l.borrower, lenderName: hospOf_(l.lender).name, borrowerName: hospOf_(l.borrower).name, dueDate: l.dueDate, status: l.status, note: l.note, createdBy: l.createdBy, decidedAt: l.decidedAt, decidedBy: l.decidedBy, reason: l.reason, closedAt: l.closedAt, role: g.role, overdue: false }, items: items, returns: returns };
+  return { loan: { loanId: l.loanId, createdAt: l.createdAt, lender: l.lender, borrower: l.borrower, lenderName: hospOf_(l.lender).name, borrowerName: hospOf_(l.borrower).name, dueDate: l.dueDate, status: l.status, note: l.note, createdBy: l.createdBy, decidedAt: l.decidedAt, decidedBy: l.decidedBy, reason: l.reason, closedAt: l.closedAt, role: g.role, origin: l.origin || 'borrower', overdue: false }, items: items, returns: returns };
 }
 const LOAN_ST = { requested: 'รอผู้ให้ยืมพิจารณา', approved: 'ยืมอยู่ (ยังคืนไม่ครบ)', active: 'ยืมอยู่ (ยังคืนไม่ครบ)', returned: 'คืนครบแล้ว', closed: 'ปิดรายการ', rejected: 'ไม่อนุมัติ', cancelled: 'ยกเลิก' };
 function loanReport_(u, loanId) { // ใบยืม-คืนรายใบ (พิมพ์/PDF/Word)
   const d = loanDetail_(u, { loanId: loanId }), l = d.loan;
   return { rpt: 'loan-' + l.loanId, title: 'ใบยืม-คืนยาระหว่างหน่วยบริการ',
-    sub: ['เลขที่ ' + l.loanId + '     วันที่ขอยืม ' + thDate_(l.createdAt.slice(0, 10)) + (l.decidedAt ? '     วันที่ให้ยืม ' + thDate_(l.decidedAt.slice(0, 10)) : ''), 'ผู้ให้ยืม: ' + l.lenderName + '     ผู้ยืม: ' + l.borrowerName, 'สถานะ: ' + (LOAN_ST[l.status] || l.status) + (l.note ? '     หมายเหตุ: ' + l.note : '')],
+    sub: ['เลขที่ ' + l.loanId + (l.origin === 'lender' ? '     วันที่ให้ยืม ' + thDate_(l.createdAt.slice(0, 10)) + '     (บันทึกโดยผู้ให้ยืม)' : '     วันที่ขอยืม ' + thDate_(l.createdAt.slice(0, 10)) + (l.decidedAt ? '     วันที่ให้ยืม ' + thDate_(l.decidedAt.slice(0, 10)) : '')), 'ผู้ให้ยืม: ' + l.lenderName + '     ผู้ยืม: ' + l.borrowerName, 'สถานะ: ' + (LOAN_ST[l.status] || l.status) + (l.note ? '     หมายเหตุ: ' + l.note : '')],
     stats: [['จำนวนรายการยา', fmtN_(d.items.length)], ['ค้างคืนรวม', fmtN_(d.items.reduce((s, i) => s + i.outstanding, 0))]],
     tables: [{ title: 'รายการยืม', head: ['ลำดับ', 'รายการยา', 'หน่วย', 'ขอยืม', 'ให้ยืม', 'คืนแล้ว', 'ค้างคืน'], aligns: ['c', 'l', 'c', 'r', 'r', 'r', 'r'], widths: [34, 190, 50, 55, 55, 55, 60],
       rows: d.items.map((i, n) => [String(n + 1), i.name, i.unit, fmtN_(i.qtyReq), fmtN_(i.qtyLent), fmtN_(i.qtyReturned), fmtN_(i.outstanding)]) },
       { title: 'ประวัติการคืน', head: ['วันที่คืน', 'รายการยา', 'จำนวน', 'หน่วย'], aligns: ['c', 'l', 'r', 'c'], widths: [70, 270, 80, 79],
         rows: [].concat.apply([], d.returns.map(r => r.items.map(x => [thDate_(r.createdAt.slice(0, 10)), x.name, fmtN_(x.qty), x.unit]))) }],
-    sigs: [['ผู้ให้ยืม', l.decidedBy], ['ผู้ยืม', l.createdBy]], note: '' };
+    sigs: [['ผู้ให้ยืม', l.decidedBy], ['ผู้ยืม', l.origin === 'lender' ? '' : l.createdBy]], note: '' };
 }
 function repLoanSum_(f) {
   const today = today_(), all = readLoans_(), lines = readAll_('LoanLines');
@@ -305,10 +305,10 @@ function loanRegReport_(u, p) {
   ls.forEach(l => lines.filter(i => i.loanId === l.loanId).sort((a, b) => a.lineNo - b.lineNo).forEach(i => {
     const o = l.status === 'active' ? Math.max(0, i.qtyLent - i.qtyReturned) : 0; out += o;
     const party = both ? [hospOf_(l.lender).name, hospOf_(l.borrower).name] : [hospOf_(type === 'out' ? l.borrower : l.lender).name];
-    rows.push([l.loanId, thDate_(l.createdAt.slice(0, 10))].concat(party, [i.name, i.unit, fmtN_(i.qtyLent), fmtN_(i.qtyReturned), l.status === 'active' ? fmtN_(o) : '-', retText_(retDates_(l.loanId, i.lineNo)), LOAN_ST[l.status] || l.status]));
+    rows.push([l.loanId, thDate_(l.createdAt.slice(0, 10))].concat(party, [i.name, i.unit, fmtN_(i.qtyLent), fmtN_(i.qtyReturned), l.status === 'active' ? fmtN_(o) : '-', retText_(retDates_(l.loanId, i.lineNo)), (LOAN_ST[l.status] || l.status) + (l.origin === 'lender' ? ' (บันทึกโดยผู้ให้ยืม)' : '')]));
   }));
   const hn = hosp ? hospOf_(hosp).name : 'ทุกหน่วยบริการ', title = type === 'out' ? 'ทะเบียนยาที่ให้ยืมแก่หน่วยบริการอื่น' : 'ทะเบียนยาที่ยืมจากหน่วยบริการอื่น';
-  const head = ['เลขที่', 'วันที่ยืม'].concat(both ? ['ผู้ให้ยืม', 'ผู้ยืม'] : [type === 'out' ? 'ผู้ยืม' : 'ผู้ให้ยืม'], ['รายการยา', 'หน่วย', type === 'out' ? 'ให้ยืม' : 'ยืม', 'คืนแล้ว', 'ค้างคืน', 'วันที่คืนจริง', 'สถานะ']);
+  const head = ['เลขที่', 'วันที่ยืม'].concat(both ? ['ผู้ให้ยืม', 'ผู้ยืม'] : [type === 'out' ? 'ผู้ยืม' : 'ผู้ให้ยืม'], ['รายการยา', 'หน่วย', type === 'out' ? 'ให้ยืม' : 'ยืม', 'คืนแล้ว', 'ค้างคืน', 'วันที่คืน', 'สถานะ']);
   return { rpt: 'loanreg-' + type, title: title, sub: [subLine_(f), 'หน่วยบริการ: ' + hn + (st === 'open' ? '   (เฉพาะรายการที่ยังไม่เสร็จสิ้น)' : '')],
     stats: [['จำนวนใบยืม', fmtN_(ls.length)], ['ยาค้างคืน (หน่วยนับรวม)', fmtN_(out)]],
     tables: [{ title: '', head: head, aligns: ['c', 'c'].concat(both ? ['l', 'l'] : ['l'], ['l', 'c', 'r', 'r', 'r', 'c', 'l']), widths: both ? [42, 44, 50, 50, 84, 28, 32, 32, 32, 44, 61] : [44, 46, 62, 108, 30, 34, 34, 34, 46, 61], rows: rows.slice(0, 3000) }],
@@ -363,8 +363,13 @@ function meList_(u, p) {
 function meStat_(u, fy) {
   const adm = u.role === 'admin', mo = monthOf_(today_()), rs = readAll_('MedErrors').filter(r => r.status === 'active' && r.fy === fy && (adm || r.hospCode === u.hospCode));
   const o = { total: rs.length, month: rs.filter(r => monthOf_(r.date) === mo).length, reach: rs.filter(meReach_).length, harm: rs.filter(meHarm_).length,
-    byType: Object.keys(ME_TYPES).map(k => ({ key: k, name: ME_TYPES[k], count: rs.filter(r => r.errType === k).length })) };
-  if (adm) o.byHosp = HOSPITALS.map(h => { const x = rs.filter(r => r.hospCode === h.code); return { name: h.name, count: x.length, harm: x.filter(meHarm_).length }; }).filter(x => x.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+    byType: Object.keys(ME_TYPES).map(k => ({ key: k, name: ME_TYPES[k], count: rs.filter(r => r.errType === k).length })),
+    // รายเดือนตลอดปีงบ (ต.ค.–ก.ย.) แยก 3 กลุ่มความรุนแรง: A-B ยังไม่ถึงผู้ป่วย / C-D ถึงผู้ป่วยแต่ไม่เกิดอันตราย / E-I เกิดอันตราย
+    byMonth: MONTH_NO.map(m => { const x = rs.filter(r => monthOf_(r.date) === m); return { mo: m, ab: x.filter(r => !meReach_(r)).length, cd: x.filter(r => meReach_(r) && !meHarm_(r)).length, ei: x.filter(meHarm_).length }; }),
+    bySev: Object.keys(ME_SEV).map(k => ({ sev: k, count: rs.filter(r => r.severity === k).length })),
+    topDrugs: (() => { const g = {}; rs.forEach(r => { const k = String(r.drugName || '').trim(); if (k) { const kk = k.toLowerCase(); g[kk] = g[kk] || { name: k, count: 0 }; g[kk].count++; } }); return Object.keys(g).map(k => g[k]).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 5); })(),
+    topKinds: (() => { const g = {}; rs.forEach(r => { if (r.errKind) g[r.errKind] = (g[r.errKind] || 0) + 1; }); return Object.keys(g).map(k => ({ name: k, count: g[k] })).sort((a, b) => b.count - a.count).slice(0, 5); })() };
+  if (adm) o.byHosp = HOSPITALS.map(h => { const x = rs.filter(r => r.hospCode === h.code); return { code: h.code, name: h.name, count: x.length, reach: x.filter(r => meReach_(r) && !meHarm_(r)).length, harm: x.filter(meHarm_).length }; }).sort((a, b) => b.count - a.count);
   return o;
 }
 function meReport_(u, p) {
@@ -373,9 +378,13 @@ function meReport_(u, p) {
   const reach = all.filter(meReach_).length, harm = all.filter(meHarm_).length;
   const stats = [['ME ทั้งหมด', fmtN_(all.length)], ['ถึงผู้ป่วย (C-I)', fmtN_(reach) + ' (' + pct_(reach, all.length) + ')'], ['เกิดอันตราย (E-I)', fmtN_(harm)]];
   if (p.rpt === 'mereg') {
-    const rows = all.sort((a, b) => a.meId < b.meId ? -1 : 1).map(r => [r.meId, thDate_(r.date), hospOf_(r.hospCode).name, r.hn, r.drugName, r.drugPair || '-', (ME_TYPES[r.errType] || r.errType).replace(' error', ''), r.errKind || '-', r.severity, r.detail]);
-    return { rpt: 'mereg', title: 'ทะเบียนความคลาดเคลื่อนทางยา (Medication Error)', sub: sub, stats: stats,
-      tables: [{ title: '', head: ['เลขที่', 'วันที่', 'หน่วยบริการ', 'HN', 'ชื่อยา', 'ยาคู่', 'ประเภท', 'ชนิด', 'ระดับ', 'รายละเอียด'], aligns: ['c', 'c', 'l', 'c', 'l', 'l', 'l', 'l', 'c', 'l'], widths: [40, 42, 48, 36, 58, 46, 46, 62, 26, 95], rows: rows.slice(0, 3000) }],
+    const one = !!x.hosp;  // รายงานของหน่วยบริการเดียว (หน่วยบริการเอง หรือแอดมินเลือกหน่วย) ไม่ต้องมีคอลัมน์หน่วยบริการ
+    const rows = all.sort((a, b) => a.meId < b.meId ? -1 : 1).map(r => [r.meId, thDate_(r.date)].concat(one ? [] : [hospOf_(r.hospCode).name], [r.hn, r.drugName, r.drugPair || '-', (ME_TYPES[r.errType] || r.errType).replace(' error', ''), r.errKind || '-', r.severity, r.detail, r.reporter || '-']));
+    const head = ['เลขที่', 'วันที่'].concat(one ? [] : ['หน่วยบริการ'], ['HN', 'ชื่อยา', 'ยาคู่', 'ประเภท', 'ชนิด', 'ระดับ', 'รายละเอียด', 'ผู้รายงาน']);
+    const aligns = ['c', 'c'].concat(one ? [] : ['l'], ['c', 'l', 'l', 'l', 'l', 'c', 'l', 'l']);
+    const widths = one ? [36, 42, 38, 60, 50, 48, 62, 24, 90, 49] : [34, 40, 44, 34, 52, 42, 44, 56, 22, 80, 51];
+    return { rpt: 'mereg', title: 'ทะเบียนความคลาดเคลื่อนทางยา (Medication Error)' + (one ? ' ' + hn : ''), sub: sub, stats: stats,
+      tables: [{ title: '', head: head, aligns: aligns, widths: widths, rows: rows.slice(0, 3000) }],
       note: rows.length > 3000 ? 'แสดง 3,000 รายการแรกจาก ' + rows.length + ' กรุณากรองให้แคบลง' : '' };
   }
   if (p.rpt === 'mesum') {
