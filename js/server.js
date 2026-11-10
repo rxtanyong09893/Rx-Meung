@@ -75,7 +75,7 @@ function stockCard_(u, p) {
 function listRequests_(u, p) {
   const adm = u.role === 'admin', items = readAll_('RequestItems'); const st = String(p.status || '');
   return readAll_('Requests').filter(r => (adm ? (!p.hospCode || r.hospCode === p.hospCode) : r.hospCode === u.hospCode) && (!st || r.status === st))
-    .sort((a, b) => a.reqId < b.reqId ? 1 : -1).slice(0, 300)
+    .sort((a, b) => idCmp_(b.reqId, a.reqId)).slice(0, 300)
     .map(r => ({ reqId: r.reqId, hospCode: r.hospCode, hospName: hospOf_(r.hospCode).name, createdAt: r.createdAt, createdBy: r.createdBy, status: r.status, docNo: r.docNo, note: r.note, itemCount: items.filter(i => i.reqId === r.reqId).length }));
 }
 function requestDetail_(u, p) {
@@ -182,7 +182,9 @@ function repRcvReg_(f, p) {
       rows: shown.map(r => [rcvNo_(r), thDate_(r.date), r.drugName, r.unit, r.lotNo, thDate_(r.expDate), fmtN_(r.qty), fmtM_(r.unitPrice), fmtM_(r.value), r.supplier, r.invoiceNo || '-']) }],
     note: rows.length > shown.length ? 'แสดง 2,000 รายการแรกจากทั้งหมด ' + rows.length + ' รายการ กรุณากรองช่วงให้แคบลง' : '' };
 }
-const rcvNo_ = r => r.rcvSeq ? r.rcvSeq + '/' + r.fy : '-';
+const rcvNo_ = r => r.rcvSeq ? String(r.rcvSeq).padStart(3, '0') + '/' + r.fy : '-';
+/** เรียงเลขที่เอกสาร (RQ999 ก่อน RQ1000) */
+const idCmp_ = (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 /** รายงานการรับยาเข้าตามลำดับใบรับยา: แต่ละใบแสดงวันที่ ผู้ขาย เลขที่ใบส่งของ ผู้รับ และรายการยาครบทุกรายการ เรียงเลขที่ 1, 2, 3, … */
 function repRcvDoc_(f, p) {
   const no = p.rcvNo ? int_(p.rcvNo, 1, 1e7, 'เลขที่ใบรับ') : 0;
@@ -248,7 +250,7 @@ const retText_ = ds => ds.length ? ds.map(thDate_).join(', ') : '-';
 function lineMap_(arr) { const m = {}; (Array.isArray(arr) ? arr : []).forEach(x => { if (x) m[String(x.lineNo)] = x; }); return m; }
 function loanRows_(u) {
   const loans = readLoans_(), lines = readAll_('LoanLines'), today = today_();
-  return loans.filter(l => u.role === 'admin' || l.lender === u.hospCode || l.borrower === u.hospCode).sort((a, b) => a.loanId < b.loanId ? 1 : -1).slice(0, 500).map(l => {
+  return loans.filter(l => u.role === 'admin' || l.lender === u.hospCode || l.borrower === u.hospCode).sort((a, b) => idCmp_(b.loanId, a.loanId)).slice(0, 500).map(l => {
     const its = lines.filter(i => i.loanId === l.loanId), out = its.reduce((s, i) => s + Math.max(0, i.qtyLent - i.qtyReturned), 0), role = loanRole_(u, l);
     return { loanId: l.loanId, createdAt: l.createdAt, lender: l.lender, borrower: l.borrower, lenderName: hospOf_(l.lender).name, borrowerName: hospOf_(l.borrower).name, dueDate: l.dueDate, status: l.status, itemCount: its.length, outstanding: out, role: role, origin: l.origin || 'borrower',
       returnDates: retDates_(l.loanId), overdue: l.status === 'active' && out > 0, open: l.status === 'requested' || l.status === 'active', todo: role === 'lender' && l.status === 'requested' };
@@ -267,7 +269,7 @@ function loanDetail_(u, p) {
   const g = loanGet_(u, p.loanId), l = g.l;
   const items = readAll_('LoanLines').filter(i => i.loanId === l.loanId).sort((a, b) => a.lineNo - b.lineNo).map(i => ({ lineNo: i.lineNo, name: i.name, unit: i.unit, qtyReq: i.qtyReq, qtyLent: i.qtyLent, qtyReturned: i.qtyReturned, outstanding: Math.max(0, i.qtyLent - i.qtyReturned) }));
   const rl = readAll_('LoanReturnLines');
-  const returns = readAll_('LoanReturns').filter(r => r.loanId === l.loanId).sort((a, b) => a.retId < b.retId ? -1 : 1).map(r => ({ retId: r.retId, createdAt: r.createdAt, createdBy: r.createdBy, note: r.note, items: rl.filter(x => x.retId === r.retId).map(x => ({ name: x.name, unit: x.unit, qty: x.qty })) }));
+  const returns = readAll_('LoanReturns').filter(r => r.loanId === l.loanId).sort((a, b) => idCmp_(a.retId, b.retId)).map(r => ({ retId: r.retId, createdAt: r.createdAt, createdBy: r.createdBy, note: r.note, items: rl.filter(x => x.retId === r.retId).map(x => ({ name: x.name, unit: x.unit, qty: x.qty })) }));
   const out = items.reduce((s, i) => s + i.outstanding, 0);
   return { loan: { loanId: l.loanId, createdAt: l.createdAt, lender: l.lender, borrower: l.borrower, lenderName: hospOf_(l.lender).name, borrowerName: hospOf_(l.borrower).name, dueDate: l.dueDate, status: l.status, note: l.note, createdBy: l.createdBy, decidedAt: l.decidedAt, decidedBy: l.decidedBy, reason: l.reason, closedAt: l.closedAt, role: g.role, origin: l.origin || 'borrower', overdue: false }, items: items, returns: returns };
 }
@@ -357,7 +359,7 @@ function meFilter_(u, p) {
 }
 function meList_(u, p) {
   const x = meFilter_(u, p);
-  return x.rows.sort((a, b) => a.meId < b.meId ? 1 : -1).slice(0, 1000).map(r => meView_(u, r));
+  return x.rows.sort((a, b) => (a.createdAt + a.meId) < (b.createdAt + b.meId) ? 1 : -1).slice(0, 1000).map(r => meView_(u, r));
 }
 /** สถิติ ME ปีงบประมาณปัจจุบันสำหรับหน้าหลัก (หน่วยบริการเห็นของตนเอง แอดมินเห็นทุกหน่วย) */
 function meStat_(u, fy) {
@@ -379,7 +381,7 @@ function meReport_(u, p) {
   const stats = [['ME ทั้งหมด', fmtN_(all.length)], ['ถึงผู้ป่วย (C-I)', fmtN_(reach) + ' (' + pct_(reach, all.length) + ')'], ['เกิดอันตราย (E-I)', fmtN_(harm)]];
   if (p.rpt === 'mereg') {
     const one = !!x.hosp;  // รายงานของหน่วยบริการเดียว (หน่วยบริการเอง หรือแอดมินเลือกหน่วย) ไม่ต้องมีคอลัมน์หน่วยบริการ
-    const rows = all.sort((a, b) => a.meId < b.meId ? -1 : 1).map(r => [r.meId, thDate_(r.date)].concat(one ? [] : [hospOf_(r.hospCode).name], [r.hn, r.drugName, r.drugPair || '-', (ME_TYPES[r.errType] || r.errType).replace(' error', ''), r.errKind || '-', r.severity, r.detail, r.reporter || '-']));
+    const rows = all.sort((a, b) => idCmp_(a.meId, b.meId)).map(r => [r.meId, thDate_(r.date)].concat(one ? [] : [hospOf_(r.hospCode).name], [r.hn, r.drugName, r.drugPair || '-', (ME_TYPES[r.errType] || r.errType).replace(' error', ''), r.errKind || '-', r.severity, r.detail, r.reporter || '-']));
     const head = ['เลขที่', 'วันที่'].concat(one ? [] : ['หน่วยบริการ'], ['HN', 'ชื่อยา', 'ยาคู่', 'ประเภท', 'ชนิด', 'ระดับ', 'รายละเอียด', 'ผู้รายงาน']);
     const aligns = ['c', 'c'].concat(one ? [] : ['l'], ['c', 'l', 'l', 'l', 'l', 'c', 'l', 'l']);
     const widths = one ? [36, 42, 38, 60, 50, 48, 62, 24, 90, 49] : [34, 40, 44, 34, 52, 42, 44, 56, 22, 80, 51];

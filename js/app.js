@@ -736,14 +736,12 @@ function meCharts(me) {
   const total = me.total || 0, pct = n => total ? Math.round(n / total * 100) + '%' : '';
   const sev = hBars((me.bySev || []).map(x => ({ label: 'ระดับ ' + x.sev + (x.count ? '  (' + pct(x.count) + ')' : ''), parts: [[meGrp(x.sev), x.count]], go: 'me:s:' + x.sev, title: 'ระดับ ' + x.sev + ' ' + (ME_SEV[x.sev] || '') + ': ' + x.count + ' รายการ ' + pct(x.count) })));
   const types = hBars(me.byType.map(t => ({ label: ME_SHORT[t.key] || t.name, parts: t.count, go: 'me:t:' + t.key, title: (ME_SHORT[t.key] || t.name) + ' (' + (ME_TYPE_TH[t.key] || '') + '): ' + t.count + ' รายการ' })), '#1d5fa8');
-  const drugs = (me.topDrugs || []).length ? hBars(me.topDrugs.map(d => ({ label: d.name, parts: d.count })), '#5b7069') : '<div class="mut" style="font-size:.85rem">ยังไม่มีข้อมูล</div>';
   const kinds = (me.topKinds || []).length ? hBars(me.topKinds.map(d => ({ label: d.name, parts: d.count })), '#5b7069') : '<div class="mut" style="font-size:.85rem">ยังไม่มีข้อมูล</div>';
   const hosp = adm ? `<div class="mcc" style="grid-column:1/-1"><h4>ME รายหน่วยบริการ <small>คลิกเพื่อดูรายการของหน่วย</small></h4>${meLegend()}${hBars((me.byHosp || []).map(h => ({ label: h.name, parts: [['ab', h.count - h.reach - h.harm], ['cd', h.reach], ['ei', h.harm]], go: 'me:h:' + h.code, title: h.name + ': ทั้งหมด ' + h.count + ' (E-I ' + h.harm + ')' })))}</div>` : '';
   return `<div class="mch">
     <div class="mcc"><h4>ME รายเดือน <small>ปีงบประมาณนี้</small></h4>${meLegend()}${months}</div>
     <div class="mcc"><h4>ระดับความรุนแรง (NCC MERP) <small>ร้อยละของทั้งหมด</small></h4>${sev}</div>
-    <div class="mcc"><h4>ประเภทความคลาดเคลื่อน</h4>${types}</div>
-    <div class="mcc"><h4>ยาที่เกิด ME บ่อย <small>5 อันดับ</small></h4>${drugs}<h4 style="margin-top:10px">ชนิดที่พบบ่อย <small>5 อันดับ</small></h4>${kinds}</div>
+    <div class="mcc"><h4>ประเภทความคลาดเคลื่อน</h4>${types}<h4 style="margin-top:12px">ชนิดที่พบบ่อย <small>5 อันดับ</small></h4>${kinds}</div>
     ${hosp}</div>`;
 }
 function meHomeHtml(me) {
@@ -764,7 +762,7 @@ VIEWS.me = async el => {
   <div class="card"><div class="fg"><div><label>ปีงบประมาณ</label><select id="mfy">${meFyOpts(F.fy)}</select></div><div><label>เดือน</label><select id="mmo">${meMoOpts(F.month)}</select></div>
   ${adm ? `<div><label>หน่วยบริการ</label><select id="mho">${meHospOpts(F.hosp)}</select></div>` : ''}<div><label>ระดับความรุนแรง</label><select id="msv">${meSevOpts(F.sev, 1)}</select></div><div><label>ประเภท</label><select id="mty">${meTypeOpts(F.type, 1)}</select></div></div></div>
   <div class="grid" style="margin-bottom:12px"><div class="stat"><b>${fmt(okRows.length)}</b><span>ME ทั้งหมด</span></div><div class="stat w"><b>${fmt(reach)}</b><span>ถึงผู้ป่วย (C-I)</span></div><div class="stat d"><b>${fmt(harm)}</b><span>เกิดอันตราย (E-I)</span></div></div>
-  ${rows.length ? tbl([['เลขที่'], ['วันที่เกิดเหตุ'], adm ? ['หน่วยบริการ'] : null, ['HN'], ['ชื่อยา'], ['ประเภท / ชนิด'], ['ระดับ', 'c'], ['สถานะ']].filter(Boolean), rows.map(r => `<tr class="clk" data-me="${esc(r.meId)}"><td>${esc(r.meId)}</td><td>${thDate(r.date)}</td>${adm ? `<td>${esc(r.hospName)}</td>` : ''}<td>${esc(r.hn)}</td><td>${esc(r.drugName)}${r.drugPair ? ' <span class="mut">⇄ ' + esc(r.drugPair) + '</span>' : ''}</td><td>${esc(ME_TYPE[r.errType] || r.errType)}${r.errKind ? '<br><span class="mut">' + esc(r.errKind) + '</span>' : ''}</td><td class="c">${sevBadge(r.severity)}</td><td>${r.status === 'active' ? '<span class="badge b-active">ใช้งาน</span>' : badge('cancelled')}</td></tr>`).join('')) : empty('ไม่มีรายการ ME ในเงื่อนไขที่เลือก')}${rows.length >= 1000 ? '<div class="msg e">แสดง 1,000 รายการล่าสุด กรุณากรองให้แคบลง</div>' : ''}`;
+  ${rows.length ? tbl([['เลขที่'], ['วันที่เกิดเหตุ'], adm ? ['หน่วยบริการ'] : null, ['HN'], ['ชื่อยา'], ['ประเภท / ชนิด'], ['ระดับ', 'c'], ['สถานะ']].filter(Boolean), rows.map(r => `<tr class="clk" data-me="${esc(r.meId)}"><td style="white-space:nowrap">${esc(r.meId)}</td><td style="white-space:nowrap">${thDate(r.date)}</td>${adm ? `<td>${esc(r.hospName)}</td>` : ''}<td>${esc(r.hn)}</td><td>${esc(r.drugName)}${r.drugPair ? ' <span class="mut">⇄ ' + esc(r.drugPair) + '</span>' : ''}</td><td>${esc(ME_TYPE[r.errType] || r.errType)}${r.errKind ? '<br><span class="mut">' + esc(r.errKind) + '</span>' : ''}</td><td class="c">${sevBadge(r.severity)}</td><td>${r.status === 'active' ? '<span class="badge b-active">ใช้งาน</span>' : badge('cancelled')}</td></tr>`).join('')) : empty('ไม่มีรายการ ME ในเงื่อนไขที่เลือก')}${rows.length >= 1000 ? '<div class="msg e">แสดง 1,000 รายการล่าสุด กรุณากรองให้แคบลง</div>' : ''}`;
   const bind = (id, k) => { const e = $('#' + id); if (e) e.onchange = () => { F[k] = e.value; go('me'); }; };
   bind('mfy', 'fy'); bind('mmo', 'month'); bind('mho', 'hosp'); bind('msv', 'sev'); bind('mty', 'type');
   el.querySelectorAll('[data-me]').forEach(r => r.onclick = () => openME(r.dataset.me));
