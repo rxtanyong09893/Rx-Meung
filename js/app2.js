@@ -69,14 +69,20 @@
     } catch (e) { pskName = ''; }
     return pskName;
   }
+  /* บังคับเลขอารบิก: ฟอนต์ TH SarabunPSK บางเวอร์ชันเปลี่ยนตัวเลขเป็นเลขไทยเองเมื่อหน้าเว็บตั้งภาษาไทย (OpenType "locl")
+     จึงตั้งภาษาของเอกสารที่พิมพ์เป็นอังกฤษ (ตัวอักษรไทยแสดงปกติ) และปิดคุณสมบัติ locl ของฟอนต์ */
+  (function () { const st = document.createElement('style'); st.id = 'arabicNum';
+    st.textContent = '#printArea,#printArea *,.sheet,.sheet *,.pdfhost,.pdfhost *{font-feature-settings:"locl" 0,"lnum" 1;font-variant-numeric:lining-nums;font-language-override:"ENG"}';
+    document.head.appendChild(st); })();
   printHtml = function (html) {
-    const p = $('#printArea'); p.innerHTML = html;
+    const p = $('#printArea'); p.setAttribute('lang', 'en'); p.innerHTML = html;
     const L = landscapeNeeded(p), f = pskFont(), ff = f ? '"' + f + '"' : '"Sarabun"', fs = f ? '16pt' : '12pt';
     p.style.setProperty('--pf', ff); p.style.setProperty('--ps', fs);
     let st = document.getElementById('pgsz'); if (!st) { st = document.createElement('style'); st.id = 'pgsz'; document.head.appendChild(st); }
     st.textContent = '@media print{@page{size:A4 ' + (L ? 'landscape' : 'portrait') + ';margin:' + (L ? '25mm 20mm 20mm 25mm' : '25mm 20mm 20mm 30mm')
-      + ';@top-center{content:"- " counter(page) " -";font-family:' + ff + ',sans-serif;font-size:' + fs + '}}@page:first{@top-center{content:none}}}';
+      + ';@top-center{content:"- " counter(page) " -";font-family:' + ff + ',sans-serif;font-size:' + fs + ';font-feature-settings:"locl" 0}}@page:first{@top-center{content:none}}}';
     if (!f) toast('เครื่องนี้ไม่มีฟอนต์ TH SarabunPSK จึงพิมพ์ด้วย Sarabun ขนาดเทียบเท่า');
-    setTimeout(() => { window.print(); setTimeout(() => { p.innerHTML = ''; }, 800); }, 150);
+    const H = document.documentElement, hl = H.getAttribute('lang') || 'th'; H.setAttribute('lang', 'en');  // เลขหน้าหัวกระดาษก็เป็นเลขอารบิก
+    setTimeout(() => { window.print(); setTimeout(() => { p.innerHTML = ''; H.setAttribute('lang', hl); }, 800); }, 150);
   };
 })();

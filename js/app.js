@@ -338,7 +338,7 @@ function loadScript(src) {
 /** PDF: A4 ขอบกระดาษตามงานสารบรรณ แนวตั้ง/แนวนอนตามความกว้างตาราง ฟอนต์ Sarabun 12pt (ตาเห็นเท่ากับ TH SarabunPSK 16) */
 async function pdfBlob(html) {
   await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
-  const host = document.createElement('div'); host.className = 'pdfhost'; host.innerHTML = '<div class="pdfdoc">' + html + '</div>'; document.body.appendChild(host);
+  const host = document.createElement('div'); host.className = 'pdfhost'; host.setAttribute('lang', 'en'); host.innerHTML = '<div class="pdfdoc">' + html + '</div>'; document.body.appendChild(host);
   try {
     const L = landscapeNeeded(host), wmm = L ? 297 - 25 - 20 : 210 - 30 - 20;
     host.firstElementChild.style.width = Math.round(wmm / 25.4 * 96) + 'px';
